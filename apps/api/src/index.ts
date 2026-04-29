@@ -27,6 +27,8 @@ const allowedExt = new Set(['.mp4', '.mov', '.webm', '.m4v']);
 const allowedMime = new Set(['video/mp4', 'video/quicktime', 'video/webm', 'video/x-m4v']);
 const safeFrameFileRegex = /^frame_\d{4}\.jpg$/;
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const startupAttempts = 20;
+const startupDelayMs = 2000;
 
 if (!fs.existsSync(localPath)) fs.mkdirSync(localPath, { recursive: true });
 
@@ -45,6 +47,8 @@ const upload = multer({
   limits: { fileSize: maxFileSizeMb * 1024 * 1024 }
 });
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const validateVideoFile = (file: Express.Multer.File) => {
   const ext = path.extname(file.originalname || '').toLowerCase();
   return allowedExt.has(ext) && allowedMime.has(file.mimetype);
@@ -54,8 +58,34 @@ const ensureDatabaseSchema = async () => {
   await pool.query('ALTER TABLE video_jobs ADD COLUMN IF NOT EXISTS analysis_report JSONB');
 };
 
-app.get('/health', (_, res) => res.json({ ok: true }));
+const waitForDatabaseAndEnsureSchema = async () => {
+  for (let attempt = 1; attempt <= startupAttempts; attempt += 1) {
+    try {
+      await ensureDatabaseSchema();
+      return;
+    } catch (error) {
+      if (attempt === startupAttempts) throw error;
+      console.warn('Database is not ready yet, retrying...', error);
+      await sleep(startupDelayMs);
+    }
+  }
+};
 
+const ensureMinioBucket = async () => {
+  for (let attempt = 1; attempt <= startupAttempts; attempt += 1) {
+    try {
+      await s3.send(new CreateBucketCommand({ Bucket: minioBucket }));
+      return;
+    } catch (error: any) {
+      if (error?.name === 'BucketAlreadyOwnedByYou' || error?.name === 'BucketAlreadyExists') return;
+      if (attempt === startupAttempts) throw error;
+      console.warn('MinIO is not ready yet, retrying bucket init...', error);
+      await sleep(startupDelayMs);
+    }
+  }
+};
+
+app.get('/health', (_, res) => res.json({ ok: true }));
 app.post('/api/videos/upload', upload.single('video'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No video file provided' });
   if (!validateVideoFile(req.file)) return res.status(400).json({ error: 'Invalid file type. Allowed: mp4/mov/webm/m4v' });
@@ -78,11 +108,7 @@ app.post('/api/videos/upload', upload.single('video'), async (req, res) => {
     fs.writeFileSync(target, req.file.buffer);
   }
 
-  await pool.query(
-    'INSERT INTO video_jobs (id, filename, storage_key, status) VALUES ($1, $2, $3, $4)',
-    [jobId, originalFilename, key, 'queued']
-  );
-
+  await pool.query('INSERT INTO video_jobs (id, filename, storage_key, status) VALUES ($1, $2, $3, $4)', [jobId, originalFilename, key, 'queued']);
   await redis.lpush('video_jobs_queue', JSON.stringify({ id: jobId, storageKey: key }));
   res.json({ jobId, status: 'queued' });
 });
@@ -126,15 +152,11 @@ const port = Number(process.env.API_PORT || 4000);
 
 const bootstrap = async () => {
   try {
-    await ensureDatabaseSchema();
-    if (storageMode === 'minio') {
-      try {
-        await s3.send(new CreateBucketCommand({ Bucket: minioBucket }));
-      } catch (_e) {}
-    }
+    await waitForDatabaseAndEnsureSchema();
+    if (storageMode === 'minio') await ensureMinioBucket();
     app.listen(port, () => console.log(`API running on ${port}`));
   } catch (error) {
-    console.error('Failed to ensure database schema on startup:', error);
+    console.error('API startup failed: dependencies are not ready.', error);
     process.exit(1);
   }
 };
