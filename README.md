@@ -27,6 +27,20 @@ Monorepo MVP для анализа видео (SEO-ready metadata) с веб-и�
 - Frontend показывает понятный отчёт: статус, технические параметры, сетку кадров, оценку платформ, проблемы, рекомендации, SEO-заготовку.
 - Автоопрос статуса задачи каждые 2 секунды до завершения (`done`/`failed`).
 
+
+## PR3: AI-ready SEO scaffolding (mock/offline)
+Добавлено:
+- Worker формирует `ai_input` внутри `analysis_report` (technicalSummary, frameSummary, platformFit, issues, recommendations, userGoal/niche/language).
+- Добавлен `apps/worker/seo_prompt_builder.py` с функциями сборки AI-промптов на русском (`build_ai_video_analysis_prompt`, `build_platform_seo_prompt`).
+- Добавлен `apps/worker/seo_mock_generator.py` с offline/mock-генерацией SEO-пакетов для YouTube Video, YouTube Shorts, Instagram Reels и TikTok.
+- `seoDraft` теперь заполняется реальными mock-данными для всех платформ вместо пустых значений.
+- Frontend показывает SEO-пакеты по платформам в удобных блоках и кнопки «Скопировать» для ключевых полей.
+
+Важно:
+- Внешние AI API (OpenAI/Gemini/Claude и др.) в PR3 не подключаются.
+- SEO-генерация сейчас работает в mock/offline режиме.
+- Следующий шаг после PR3 — заменить mock-генератор на реальный AI-провайдер.
+
 ## Быстрый старт
 ```bash
 cp .env.example .env
