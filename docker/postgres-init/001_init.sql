@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS video_jobs (
   result JSONB,
   frames JSONB,
   analysis_report JSONB,
+  user_context JSONB,
   error TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
