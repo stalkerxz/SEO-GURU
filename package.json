@@ -1,0 +1,11 @@
+{
+  "name": "video-seo-analyzer",
+  "private": true,
+  "workspaces": ["apps/web", "apps/api"],
+  "scripts": {
+    "dev:web": "npm --workspace apps/web run dev",
+    "dev:api": "npm --workspace apps/api run dev",
+    "build": "npm --workspace apps/web run build && npm --workspace apps/api run build",
+    "lint": "npm --workspace apps/web run lint && npm --workspace apps/api run lint"
+  }
+}
