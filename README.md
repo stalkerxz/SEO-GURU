@@ -67,6 +67,15 @@ scripts/smoke-check.sh
 - **npm build не проходит**
   - Выполните `npm install` в корне и повторите `npm run -w apps/api build` / `npm run -w apps/web build`.
 
+
+## Команды
+```bash
+npm run dev:web
+npm run dev:api
+npm run build
+npm run lint
+```
+
 ## Локальная разработка без Docker
 1) Скопировать окружение:
 ```bash

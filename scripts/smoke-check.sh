@@ -4,6 +4,16 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+if ! command -v docker >/dev/null 2>&1; then
+  echo "❌ docker CLI not found. Install Docker and re-run smoke check."
+  exit 1
+fi
+
+if ! command -v curl >/dev/null 2>&1; then
+  echo "❌ curl not found. Install curl and re-run smoke check."
+  exit 1
+fi
+
 if [[ ! -f .env ]]; then
   echo "❌ .env not found. Run: cp .env.example .env"
   exit 1
