@@ -9,6 +9,8 @@ import boto3
 import psycopg2
 import redis
 
+from seo_mock_generator import generate_mock_seo_package
+
 REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379')
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://video:video@localhost:5432/video_seo')
 STORAGE_MODE = os.getenv('STORAGE_MODE', 'local')
@@ -56,7 +58,7 @@ def persist_local_frame(frame_path: Path, job_id: str, idx: int, approx_time_sec
     }
 
 
-def build_analysis_report(duration, width, height, fps, has_audio, bitrate):
+def build_analysis_report(duration, width, height, fps, has_audio, bitrate, frames):
     short_side = min(width, height) if width and height else 0
     is_vertical = bool(width and height and height > width)
     is_horizontal = bool(width and height and width > height)
@@ -140,12 +142,38 @@ def build_analysis_report(duration, width, height, fps, has_audio, bitrate):
         },
         'detectedIssues': detected_issues,
         'recommendations': recommendations,
-        'seoDraft': {
-            'youtubeShorts': {'title': '', 'description': '', 'hashtags': [], 'tags': [], 'coverText': '', 'pinnedComment': ''},
-            'youtubeVideo': {'title': '', 'description': '', 'hashtags': [], 'tags': [], 'coverText': '', 'pinnedComment': ''},
-            'instagramReels': {'title': '', 'description': '', 'hashtags': [], 'tags': [], 'coverText': '', 'pinnedComment': ''},
-            'tiktok': {'title': '', 'description': '', 'hashtags': [], 'tags': [], 'coverText': '', 'pinnedComment': ''}
-        }
+        'ai_input': {
+            'technicalSummary': {
+                'durationSec': duration,
+                'resolution': f'{width}x{height}' if width and height else None,
+                'fps': fps,
+                'aspectRatio': aspect_ratio,
+                'hasAudio': has_audio,
+                'bitrate': bitrate
+            },
+            'frameSummary': {
+                'totalFrames': len(frames),
+                'frames': [
+                    {
+                        'index': frame.get('index'),
+                        'approxTimeSec': frame.get('approxTimeSec'),
+                        'previewUrl': frame.get('previewUrl')
+                    }
+                    for frame in frames
+                ]
+            },
+            'platformFit': {
+                'youtubeShorts': shorts_score,
+                'youtubeVideo': youtube_score,
+                'instagramReels': reels_score,
+                'tiktok': tiktok_score
+            },
+            'detectedIssues': detected_issues,
+            'recommendations': recommendations,
+            'userGoal': 'views_and_reach',
+            'niche': 'general_video',
+            'language': 'ru'
+        },
     }
 
 
@@ -182,8 +210,16 @@ def analyze_file(file_path: str, job_id: str):
         height=height,
         fps=vstream.get('r_frame_rate'),
         has_audio=astream is not None,
-        bitrate=meta.get('format', {}).get('bit_rate')
+        bitrate=meta.get('format', {}).get('bit_rate'),
+        frames=frames,
     )
+
+    analysis_report['seoDraft'] = {
+        'youtubeVideo': generate_mock_seo_package(analysis_report, 'youtubeVideo'),
+        'youtubeShorts': generate_mock_seo_package(analysis_report, 'youtubeShorts'),
+        'instagramReels': generate_mock_seo_package(analysis_report, 'instagramReels'),
+        'tiktok': generate_mock_seo_package(analysis_report, 'tiktok'),
+    }
 
     return {
         'duration': duration,
