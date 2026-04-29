@@ -9,7 +9,7 @@ import boto3
 import psycopg2
 import redis
 
-from seo_mock_generator import generate_mock_seo_package
+from ai_seo_service import generate_seo_packages
 
 REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379')
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://video:video@localhost:5432/video_seo')
@@ -214,12 +214,11 @@ def analyze_file(file_path: str, job_id: str):
         frames=frames,
     )
 
-    analysis_report['seoDraft'] = {
-        'youtubeVideo': generate_mock_seo_package(analysis_report, 'youtubeVideo'),
-        'youtubeShorts': generate_mock_seo_package(analysis_report, 'youtubeShorts'),
-        'instagramReels': generate_mock_seo_package(analysis_report, 'instagramReels'),
-        'tiktok': generate_mock_seo_package(analysis_report, 'tiktok'),
-    }
+    seo_draft, ai_provider_used, ai_fallback_used, ai_warnings = generate_seo_packages(analysis_report)
+    analysis_report['seoDraft'] = seo_draft
+    analysis_report['aiProviderUsed'] = ai_provider_used
+    analysis_report['aiFallbackUsed'] = ai_fallback_used
+    analysis_report['aiWarnings'] = ai_warnings
 
     return {
         'duration': duration,

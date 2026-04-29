@@ -74,6 +74,9 @@ export default function Home() {
   const issues = report?.detectedIssues || [];
   const recommendations = report?.recommendations || [];
   const seoDraft = report?.seoDraft || {};
+  const aiProviderUsed = report?.aiProviderUsed || 'mock';
+  const aiFallbackUsed = Boolean(report?.aiFallbackUsed);
+  const aiWarnings = report?.aiWarnings || [];
 
   return (
     <main className="max-w-5xl mx-auto p-6 space-y-4">
@@ -95,6 +98,16 @@ export default function Home() {
           {platformFit && <section><h2 className="text-lg font-semibold">Оценка платформ</h2><ul className="list-disc ml-5"><li>YouTube Shorts: {platformFit.youtubeShorts?.score ?? '—'}</li><li>YouTube Video: {platformFit.youtubeVideo?.score ?? '—'}</li><li>Instagram Reels: {platformFit.instagramReels?.score ?? '—'}</li><li>TikTok: {platformFit.tiktok?.score ?? '—'}</li></ul></section>}
           <section><h2 className="text-lg font-semibold">Проблемы</h2><ul className="list-disc ml-5">{issues.length === 0 ? <li>Критичных проблем не найдено.</li> : issues.map((issue: string, idx: number) => <li key={idx}>{issue}</li>)}</ul></section>
           <section><h2 className="text-lg font-semibold">Рекомендации</h2><ul className="list-disc ml-5">{recommendations.length === 0 ? <li>Базовых рекомендаций пока нет.</li> : recommendations.map((rec: string, idx: number) => <li key={idx}>{rec}</li>)}</ul></section>
+
+          <section className="space-y-2">
+            <h2 className="text-lg font-semibold">AI генерация SEO</h2>
+            <p className="text-sm text-slate-600">AI provider: {aiProviderUsed} · Fallback: {aiFallbackUsed ? 'yes' : 'no'}</p>
+            {aiWarnings.length > 0 && (
+              <ul className="list-disc ml-5 text-sm text-amber-700">
+                {aiWarnings.map((warning: string, idx: number) => <li key={idx}>{warning}</li>)}
+              </ul>
+            )}
+          </section>
 
           <section className="space-y-4">
             <h2 className="text-lg font-semibold">SEO-пакеты по платформам</h2>

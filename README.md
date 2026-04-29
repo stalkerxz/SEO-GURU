@@ -84,3 +84,23 @@ npm run lint
 - автопостинг
 - интеграции YouTube/Instagram/TikTok
 - сложная тренд-аналитика
+
+## PR4: реальный AI-провайдер с безопасным fallback
+Добавлено:
+- Worker получил AI service слой `apps/worker/ai_seo_service.py`.
+- Добавлен переключатель провайдера через env: `AI_PROVIDER=mock|openai`.
+- При `AI_PROVIDER=openai` и пустом `OPENAI_API_KEY` автоматически включается fallback на mock + warning.
+- При ошибках OpenAI (включая ошибки JSON) выполняется fallback на mock (глобально или точечно по платформе), чтобы анализ не падал.
+- В `analysis_report` добавлены поля: `aiProviderUsed`, `aiFallbackUsed`, `aiWarnings`.
+- Frontend показывает строку `AI provider`, `Fallback`, а также warnings при наличии.
+
+Настройки env:
+- `AI_PROVIDER=mock`
+- `OPENAI_API_KEY=`
+- `OPENAI_MODEL=gpt-4.1-mini`
+- `AI_TIMEOUT_SECONDS=60`
+
+Как это работает:
+- `AI_PROVIDER=mock`: всегда используется локальный mock-генератор.
+- `AI_PROVIDER=openai`: используется OpenAI, но без ключа или при ошибках автоматически используется mock.
+- API-ключи нельзя коммитить в репозиторий.
