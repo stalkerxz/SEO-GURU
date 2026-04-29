@@ -37,7 +37,7 @@ export default function Home() {
         <div className="bg-white rounded p-4 shadow space-y-2">
           <p><b>Status:</b> {job.status}</p>
           <p><b>Technical params:</b> {JSON.stringify(job.result)}</p>
-          <p><b>Frames:</b> {JSON.stringify(job.frames)}</p>
+          <div><b>Frames:</b><ul className="list-disc ml-5">{(job.frames || []).map((f: any) => <li key={f.storageKey}>{f.index}: {f.storageKey}</li>)}</ul></div>
           <pre className="bg-slate-900 text-green-300 p-3 rounded overflow-auto text-xs">{JSON.stringify(job, null, 2)}</pre>
         </div>
       )}

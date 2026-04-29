@@ -5,7 +5,7 @@ Monorepo MVP для анализа видео (SEO-ready metadata) с веб-и�
 ## Стек
 - `apps/web`: Next.js 14 + React + Tailwind
 - `apps/api`: Node.js + Express + TypeScript
-- `apps/worker`: Python + FastAPI + FFmpeg
+- `apps/worker`: Python background worker + FFmpeg
 - PostgreSQL, Redis, MinIO
 - Docker Compose
 
@@ -19,13 +19,13 @@ Monorepo MVP для анализа видео (SEO-ready metadata) с веб-и�
 
 ## Быстрый старт
 ```bash
+cp .env.example .env
 docker compose up --build
 ```
 
 После запуска:
 - Web: http://localhost:3000
 - API: http://localhost:4000
-- Worker API (health): http://localhost:8000/health
 - MinIO Console: http://localhost:9001
 
 ## Локальная разработка без Docker
@@ -42,7 +42,7 @@ cd apps/worker && pip install -r requirements.txt
 ```bash
 npm run dev:web
 npm run dev:api
-python apps/worker/worker.py
+python apps/worker/worker.py  # background consumer
 ```
 
 ## Команды
