@@ -21,6 +21,7 @@ Monorepo MVP для анализа видео (SEO-ready metadata) с веб-и�
 ## PR2: отчёт анализа и превью кадров
 Добавлено:
 - API эндпоинт `GET /api/frames/:jobId/:filename` для безопасной выдачи JPEG-превью кадров (local storage и MinIO proxy).
+- API при старте применяет idempotent-миграцию: `ALTER TABLE video_jobs ADD COLUMN IF NOT EXISTS analysis_report JSONB`.
 - Worker дополняет кадры полями `approxTimeSec` и `previewUrl`.
 - В `video_jobs` добавлено поле `analysis_report` (JSONB), worker сохраняет базовый отчёт по технике, platform fit, issues, recommendations и SEO draft.
 - Frontend показывает понятный отчёт: статус, технические параметры, сетку кадров, оценку платформ, проблемы, рекомендации, SEO-заготовку.

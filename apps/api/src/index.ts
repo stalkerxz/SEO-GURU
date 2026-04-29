@@ -4,6 +4,7 @@ import multer from 'multer';
 import { randomUUID } from 'crypto';
 import path from 'path';
 import fs from 'fs';
+import { Readable } from 'stream';
 import { Pool } from 'pg';
 import Redis from 'ioredis';
 import { S3Client, PutObjectCommand, CreateBucketCommand, GetObjectCommand } from '@aws-sdk/client-s3';
@@ -25,6 +26,7 @@ const maxFileSizeMb = Number(process.env.MAX_UPLOAD_SIZE_MB || 500);
 const allowedExt = new Set(['.mp4', '.mov', '.webm', '.m4v']);
 const allowedMime = new Set(['video/mp4', 'video/quicktime', 'video/webm', 'video/x-m4v']);
 const safeFrameFileRegex = /^frame_\d{4}\.jpg$/;
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 if (!fs.existsSync(localPath)) fs.mkdirSync(localPath, { recursive: true });
 
@@ -46,6 +48,10 @@ const upload = multer({
 const validateVideoFile = (file: Express.Multer.File) => {
   const ext = path.extname(file.originalname || '').toLowerCase();
   return allowedExt.has(ext) && allowedMime.has(file.mimetype);
+};
+
+const ensureDatabaseSchema = async () => {
+  await pool.query('ALTER TABLE video_jobs ADD COLUMN IF NOT EXISTS analysis_report JSONB');
 };
 
 app.get('/health', (_, res) => res.json({ ok: true }));
@@ -83,6 +89,7 @@ app.post('/api/videos/upload', upload.single('video'), async (req, res) => {
 
 app.get('/api/frames/:jobId/:filename', async (req, res) => {
   const { jobId, filename } = req.params;
+  if (!uuidRegex.test(jobId)) return res.status(400).json({ error: 'Invalid job id' });
   if (!safeFrameFileRegex.test(filename)) return res.status(400).json({ error: 'Invalid frame filename' });
 
   const frameKey = `frames/${jobId}/${filename}`;
@@ -90,6 +97,7 @@ app.get('/api/frames/:jobId/:filename', async (req, res) => {
     if (storageMode === 'minio') {
       const data = await s3.send(new GetObjectCommand({ Bucket: minioBucket, Key: frameKey }));
       if (!data.Body) return res.status(404).json({ error: 'Frame not found' });
+      if (!(data.Body instanceof Readable)) return res.status(500).json({ error: 'Invalid frame stream' });
       res.setHeader('Content-Type', 'image/jpeg');
       data.Body.pipe(res);
       return;
@@ -109,18 +117,26 @@ app.get('/api/jobs/:id', async (req, res) => {
   res.json(result.rows[0]);
 });
 
-(async () => {
-  if (storageMode === 'minio') {
-    try {
-      await s3.send(new CreateBucketCommand({ Bucket: minioBucket }));
-    } catch (e) {}
-  }
-})();
-
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err?.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: `File too large. Max ${maxFileSizeMb}MB` });
   return res.status(500).json({ error: 'Upload failed' });
 });
 
 const port = Number(process.env.API_PORT || 4000);
-app.listen(port, () => console.log(`API running on ${port}`));
+
+const bootstrap = async () => {
+  try {
+    await ensureDatabaseSchema();
+    if (storageMode === 'minio') {
+      try {
+        await s3.send(new CreateBucketCommand({ Bucket: minioBucket }));
+      } catch (_e) {}
+    }
+    app.listen(port, () => console.log(`API running on ${port}`));
+  } catch (error) {
+    console.error('Failed to ensure database schema on startup:', error);
+    process.exit(1);
+  }
+};
+
+bootstrap();

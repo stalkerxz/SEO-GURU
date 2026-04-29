@@ -57,6 +57,8 @@ export default function Home() {
   const technical = report?.technical;
   const platformFit = report?.platformFit;
   const statusText = useMemo(() => (job?.status ? statusLabels[job.status] || job.status : null), [job?.status]);
+  const issues = report?.detectedIssues || [];
+  const recommendations = report?.recommendations || [];
 
   return (
     <main className="max-w-5xl mx-auto p-6 space-y-4">
@@ -77,6 +79,8 @@ export default function Home() {
             <p><b>{statusText}</b></p>
             {job.status === 'failed' && <p className="text-red-600">{job.error || 'Произошла ошибка анализа видео.'}</p>}
           </section>
+
+          {job.status === 'done' && !report && <p className="text-amber-700">Отчёт анализа пока не сформирован.</p>}
 
           {technical && (
             <section>
@@ -122,14 +126,14 @@ export default function Home() {
           <section>
             <h2 className="text-lg font-semibold">Проблемы</h2>
             <ul className="list-disc ml-5">
-              {(report?.detectedIssues || []).map((issue: string, idx: number) => <li key={idx}>{issue}</li>)}
+              {issues.length === 0 ? <li>Критичных проблем не найдено.</li> : issues.map((issue: string, idx: number) => <li key={idx}>{issue}</li>)}
             </ul>
           </section>
 
           <section>
             <h2 className="text-lg font-semibold">Рекомендации</h2>
             <ul className="list-disc ml-5">
-              {(report?.recommendations || []).map((rec: string, idx: number) => <li key={idx}>{rec}</li>)}
+              {recommendations.length === 0 ? <li>Базовых рекомендаций пока нет.</li> : recommendations.map((rec: string, idx: number) => <li key={idx}>{rec}</li>)}
             </ul>
           </section>
 
