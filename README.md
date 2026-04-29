@@ -104,3 +104,15 @@ npm run lint
 - `AI_PROVIDER=mock`: всегда используется локальный mock-генератор.
 - `AI_PROVIDER=openai`: используется OpenAI, но без ключа или при ошибках автоматически используется mock.
 - API-ключи нельзя коммитить в репозиторий.
+
+
+## PR5: User context for AI SEO
+- Перед загрузкой видео пользователь задаёт цель, нишу, язык, гео, бренд/автора и ключевые слова.
+- Контекст сохраняется в `video_jobs.user_context` и прокидывается в `analysis_report.ai_input`.
+- Контекст влияет и на OpenAI SEO-генерацию, и на mock fallback SEO.
+
+Run:
+```bash
+cp .env.example .env
+docker compose up --build
+```

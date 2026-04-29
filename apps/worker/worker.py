@@ -58,7 +58,7 @@ def persist_local_frame(frame_path: Path, job_id: str, idx: int, approx_time_sec
     }
 
 
-def build_analysis_report(duration, width, height, fps, has_audio, bitrate, frames):
+def build_analysis_report(duration, width, height, fps, has_audio, bitrate, frames, user_context):
     short_side = min(width, height) if width and height else 0
     is_vertical = bool(width and height and height > width)
     is_horizontal = bool(width and height and width > height)
@@ -170,14 +170,57 @@ def build_analysis_report(duration, width, height, fps, has_audio, bitrate, fram
             },
             'detectedIssues': detected_issues,
             'recommendations': recommendations,
-            'userGoal': 'views_and_reach',
-            'niche': 'general_video',
-            'language': 'ru'
+            'userGoal': user_context.get('userGoal', 'views_and_reach'),
+            'niche': user_context.get('niche', 'general_video'),
+            'language': user_context.get('language', 'ru'),
+            'geo': user_context.get('geo', ''),
+            'brandName': user_context.get('brandName', ''),
+            'keywords': user_context.get('keywords', [])
         },
     }
 
 
-def analyze_file(file_path: str, job_id: str):
+
+
+def _default_user_context():
+    return {
+        'userGoal': 'views_and_reach',
+        'niche': 'general_video',
+        'language': 'ru',
+        'geo': '',
+        'brandName': '',
+        'keywords': [],
+    }
+
+
+def get_job_context(job_id: str):
+    conn = psycopg2.connect(DATABASE_URL)
+    cur = conn.cursor()
+    cur.execute('SELECT user_context FROM video_jobs WHERE id=%s', (job_id,))
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+
+    default_context = _default_user_context()
+    if not row or not row[0] or not isinstance(row[0], dict):
+        return default_context
+
+    raw = row[0]
+    keywords = raw.get('keywords', [])
+    if isinstance(keywords, str):
+        keywords = [x.strip() for x in keywords.split(',') if x.strip()]
+    elif not isinstance(keywords, list):
+        keywords = []
+
+    return {
+        'userGoal': raw.get('userGoal') or default_context['userGoal'],
+        'niche': raw.get('niche') or default_context['niche'],
+        'language': raw.get('language') or default_context['language'],
+        'geo': raw.get('geo') or '',
+        'brandName': raw.get('brandName') or '',
+        'keywords': [str(x).strip() for x in keywords if str(x).strip()],
+    }
+def analyze_file(file_path: str, job_id: str, user_context):
     meta = ffprobe_json(file_path)
     vstream = next((s for s in meta.get('streams', []) if s.get('codec_type') == 'video'), {})
     astream = next((s for s in meta.get('streams', []) if s.get('codec_type') == 'audio'), None)
@@ -212,6 +255,7 @@ def analyze_file(file_path: str, job_id: str):
         has_audio=astream is not None,
         bitrate=meta.get('format', {}).get('bit_rate'),
         frames=frames,
+        user_context=user_context,
     )
 
     seo_draft, ai_provider_used, ai_fallback_used, ai_warnings = generate_seo_packages(analysis_report)
@@ -276,7 +320,8 @@ def consume_once():
     job_id = payload['id']
     try:
         update_job(job_id, 'processing')
-        result, analysis_report = analyze_file(load_video(payload['storageKey']), job_id)
+        user_context = get_job_context(job_id)
+        result, analysis_report = analyze_file(load_video(payload['storageKey']), job_id, user_context)
         update_job(job_id, 'done', result=result, analysis_report=analysis_report)
     except Exception as e:
         update_job(job_id, 'failed', error=str(e))

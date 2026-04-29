@@ -54,8 +54,24 @@ const validateVideoFile = (file: Express.Multer.File) => {
   return allowedExt.has(ext) && allowedMime.has(file.mimetype);
 };
 
+const parseKeywords = (raw: string | undefined) =>
+  (raw || '')
+    .split(',')
+    .map((keyword) => keyword.trim())
+    .filter(Boolean);
+
+const getUserContext = (body: Record<string, unknown>) => ({
+  userGoal: typeof body.userGoal === 'string' && body.userGoal.trim() ? body.userGoal.trim() : 'views_and_reach',
+  niche: typeof body.niche === 'string' && body.niche.trim() ? body.niche.trim() : 'general_video',
+  language: typeof body.language === 'string' && body.language.trim() ? body.language.trim() : 'ru',
+  geo: typeof body.geo === 'string' ? body.geo.trim() : '',
+  brandName: typeof body.brandName === 'string' ? body.brandName.trim() : '',
+  keywords: parseKeywords(typeof body.keywords === 'string' ? body.keywords : undefined)
+});
+
 const ensureDatabaseSchema = async () => {
   await pool.query('ALTER TABLE video_jobs ADD COLUMN IF NOT EXISTS analysis_report JSONB');
+  await pool.query('ALTER TABLE video_jobs ADD COLUMN IF NOT EXISTS user_context JSONB');
 };
 
 const waitForDatabaseAndEnsureSchema = async () => {
@@ -90,6 +106,7 @@ app.post('/api/videos/upload', upload.single('video'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No video file provided' });
   if (!validateVideoFile(req.file)) return res.status(400).json({ error: 'Invalid file type. Allowed: mp4/mov/webm/m4v' });
 
+  const userContext = getUserContext(req.body as Record<string, unknown>);
   const jobId = randomUUID();
   const originalFilename = req.file.originalname;
   const ext = path.extname(originalFilename).toLowerCase();
@@ -108,7 +125,7 @@ app.post('/api/videos/upload', upload.single('video'), async (req, res) => {
     fs.writeFileSync(target, req.file.buffer);
   }
 
-  await pool.query('INSERT INTO video_jobs (id, filename, storage_key, status) VALUES ($1, $2, $3, $4)', [jobId, originalFilename, key, 'queued']);
+  await pool.query('INSERT INTO video_jobs (id, filename, storage_key, status, user_context) VALUES ($1, $2, $3, $4, $5)', [jobId, originalFilename, key, 'queued', JSON.stringify(userContext)]);
   await redis.lpush('video_jobs_queue', JSON.stringify({ id: jobId, storageKey: key }));
   res.json({ jobId, status: 'queued' });
 });
