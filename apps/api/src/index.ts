@@ -6,7 +6,7 @@ import path from 'path';
 import fs from 'fs';
 import { Pool } from 'pg';
 import Redis from 'ioredis';
-import { S3Client, PutObjectCommand, CreateBucketCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, CreateBucketCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -20,9 +20,11 @@ const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 
 const storageMode = process.env.STORAGE_MODE || 'local';
 const localPath = process.env.LOCAL_STORAGE_PATH || './storage';
+const minioBucket = process.env.MINIO_BUCKET || 'videos';
 const maxFileSizeMb = Number(process.env.MAX_UPLOAD_SIZE_MB || 500);
 const allowedExt = new Set(['.mp4', '.mov', '.webm', '.m4v']);
 const allowedMime = new Set(['video/mp4', 'video/quicktime', 'video/webm', 'video/x-m4v']);
+const safeFrameFileRegex = /^frame_\d{4}\.jpg$/;
 
 if (!fs.existsSync(localPath)) fs.mkdirSync(localPath, { recursive: true });
 
@@ -59,7 +61,7 @@ app.post('/api/videos/upload', upload.single('video'), async (req, res) => {
 
   if (storageMode === 'minio') {
     await s3.send(new PutObjectCommand({
-      Bucket: process.env.MINIO_BUCKET,
+      Bucket: minioBucket,
       Key: key,
       Body: req.file.buffer,
       ContentType: req.file.mimetype
@@ -79,6 +81,28 @@ app.post('/api/videos/upload', upload.single('video'), async (req, res) => {
   res.json({ jobId, status: 'queued' });
 });
 
+app.get('/api/frames/:jobId/:filename', async (req, res) => {
+  const { jobId, filename } = req.params;
+  if (!safeFrameFileRegex.test(filename)) return res.status(400).json({ error: 'Invalid frame filename' });
+
+  const frameKey = `frames/${jobId}/${filename}`;
+  try {
+    if (storageMode === 'minio') {
+      const data = await s3.send(new GetObjectCommand({ Bucket: minioBucket, Key: frameKey }));
+      if (!data.Body) return res.status(404).json({ error: 'Frame not found' });
+      res.setHeader('Content-Type', 'image/jpeg');
+      data.Body.pipe(res);
+      return;
+    }
+
+    const framePath = path.join(localPath, frameKey);
+    if (!fs.existsSync(framePath)) return res.status(404).json({ error: 'Frame not found' });
+    return res.sendFile(path.resolve(framePath));
+  } catch (_e) {
+    return res.status(404).json({ error: 'Frame not found' });
+  }
+});
+
 app.get('/api/jobs/:id', async (req, res) => {
   const result = await pool.query('SELECT * FROM video_jobs WHERE id = $1', [req.params.id]);
   if (!result.rows[0]) return res.status(404).json({ error: 'Job not found' });
@@ -88,11 +112,10 @@ app.get('/api/jobs/:id', async (req, res) => {
 (async () => {
   if (storageMode === 'minio') {
     try {
-      await s3.send(new CreateBucketCommand({ Bucket: process.env.MINIO_BUCKET }));
+      await s3.send(new CreateBucketCommand({ Bucket: minioBucket }));
     } catch (e) {}
   }
 })();
-
 
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err?.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: `File too large. Max ${maxFileSizeMb}MB` });

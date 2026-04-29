@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS video_jobs (
   status TEXT NOT NULL DEFAULT 'queued',
   result JSONB,
   frames JSONB,
+  analysis_report JSONB,
   error TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
