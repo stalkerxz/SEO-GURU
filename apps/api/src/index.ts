@@ -5,7 +5,7 @@ import { randomUUID } from 'crypto';
 import path from 'path';
 import fs from 'fs';
 import { Readable } from 'stream';
-import { Pool } from 'pg';
+const { Pool } = require('pg');
 import Redis from 'ioredis';
 import { S3Client, PutObjectCommand, CreateBucketCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import dotenv from 'dotenv';
