@@ -120,3 +120,12 @@ python apps/worker/worker.py  # background consumer
 - Добавлен subject detection (detectedModel, filename tokens, keywords), чтобы авто-ролики явно упоминали модель (например, BMW X3).
 - Платформенные версии (YouTube Video, Shorts, Reels, TikTok) теперь отличаются по стилю и плотности текста.
 - Backend/API контракт не менялся.
+
+- PR13: улучшен UX отображения SEO-пакетов (tabs, скрытие пустых полей, chips, copy buttons).
+
+
+## PR13 / SEO results UX
+- tabs
+- hidden empty fields
+- chips
+- copy buttons

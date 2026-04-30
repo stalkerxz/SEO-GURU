@@ -36,53 +36,175 @@ const languageOptions = [
   { value: 'en', label: 'Английский' }
 ];
 
-const cn = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(' ');
-
-const scoreLabel = (score: number) => {
-  if (score >= 80) return 'Отлично подходит';
-  if (score >= 60) return 'Хороший потенциал';
-  if (score >= 40) return 'Нужна адаптация';
-  return 'Слабое соответствие';
+const contextLabels: Record<string, string> = {
+  views_and_reach: 'Охваты и просмотры',
+  subscribers: 'Подписчики',
+  leads: 'Заявки / клиенты',
+  portfolio: 'Портфолио',
+  sales: 'Продажи',
+  auto: 'Авто',
+  real_estate: 'Недвижимость',
+  travel: 'Путешествия',
+  expert_content: 'Экспертный контент',
+  music_event: 'Музыка / мероприятия',
+  beauty: 'Beauty',
+  food: 'Еда',
+  education: 'Образование',
+  general_video: 'Общее видео',
+  ru: 'Русский',
+  en: 'Английский'
 };
 
 const cardClass = 'rounded-2xl border border-slate-200 bg-white p-5 shadow-sm';
 
+const platformMeta: Record<string, { title: string; hint: string }> = {
+  youtubeVideo: {
+    title: 'YouTube Video',
+    hint: 'Для длинного или горизонтального формата'
+  },
+  youtubeShorts: {
+    title: 'Shorts',
+    hint: 'Короткий вертикальный формат'
+  },
+  instagramReels: {
+    title: 'Reels',
+    hint: 'Визуальный caption и эстетика'
+  },
+  tiktok: {
+    title: 'TikTok',
+    hint: 'Короткий hook и трендовая подача'
+  }
+};
 
-const readableVideoAngle = (value: string) => ({
-  auto_drift_phonk: 'Авто / drift / phonk',
-  auto_cinematic: 'Авто / cinematic',
-  auto_review: 'Авто / обзор',
-  auto_sale: 'Авто / продажа',
-  auto_detail_showcase: 'Авто / детали',
-  horizontal_youtube_story: 'Горизонтальный ролик для YouTube',
-  vertical_short_clip: 'Вертикальный короткий ролик',
-  square_low_quality_social_clip: 'Квадратный клип, нужна адаптация'
-} as Record<string, string>)[value] || value;
+type PlatformField = {
+  label: string;
+  value: (data: any) => any;
+  kind?: 'chips' | 'text';
+};
 
-const readableGenerationBasis = (value: string) => ({
-  technical_fingerprint: 'Техника видео',
-  filename_hints: 'Имя файла',
-  user_keywords: 'Ключевые слова',
-  mixed_context: 'Комбинированный контекст'
-} as Record<string, string>)[value] || value;
+const fieldOrder: Record<string, PlatformField[]> = {
+  youtubeVideo: [
+    { label: 'Главный заголовок', value: (d) => d.bestTitle || d.caption },
+    { label: 'Варианты заголовков', value: (d) => d.titleOptions },
+    { label: 'Описание', value: (d) => d.description || d.caption, kind: 'text' },
+    { label: 'Tags', value: (d) => d.tags, kind: 'chips' },
+    { label: 'Thumbnail text', value: (d) => d.thumbnailText || d.coverText },
+    { label: 'Pinned comment', value: (d) => d.pinnedComment, kind: 'text' },
+    { label: 'CTA', value: (d) => d.cta },
+    { label: 'Рекомендации', value: (d) => d.improvementTips }
+  ],
+  youtubeShorts: [
+    { label: 'Hook text', value: (d) => d.hookText || d.firstLineHook },
+    { label: 'Главный заголовок', value: (d) => d.bestTitle || d.caption },
+    { label: 'Описание', value: (d) => d.description || d.caption, kind: 'text' },
+    { label: 'Hashtags', value: (d) => d.hashtags, kind: 'chips' },
+    { label: 'Cover text', value: (d) => d.coverText || d.thumbnailText },
+    { label: 'Pinned comment', value: (d) => d.pinnedComment, kind: 'text' },
+    { label: 'Рекомендации', value: (d) => d.improvementTips }
+  ],
+  instagramReels: [
+    { label: 'First line hook', value: (d) => d.firstLineHook || d.hookText },
+    { label: 'Caption', value: (d) => d.caption || d.description, kind: 'text' },
+    { label: 'Hashtags', value: (d) => d.hashtags, kind: 'chips' },
+    { label: 'Cover text', value: (d) => d.coverText },
+    { label: 'Alt text', value: (d) => d.altText, kind: 'text' },
+    { label: 'Story announcement', value: (d) => d.storyAnnouncement, kind: 'text' },
+    { label: 'CTA', value: (d) => d.cta },
+    { label: 'Pinned comment', value: (d) => d.pinnedComment, kind: 'text' },
+    { label: 'Рекомендации', value: (d) => d.improvementTips }
+  ],
+  tiktok: [
+    { label: 'Hook text', value: (d) => d.hookText || d.firstLineHook },
+    { label: 'Caption', value: (d) => d.caption || d.description, kind: 'text' },
+    { label: 'Trend angle', value: (d) => d.trendAngle },
+    { label: 'Hashtags', value: (d) => d.hashtags, kind: 'chips' },
+    { label: 'Cover text', value: (d) => d.coverText || d.thumbnailText },
+    { label: 'CTA', value: (d) => d.cta },
+    { label: 'Pinned comment', value: (d) => d.pinnedComment, kind: 'text' },
+    { label: 'Рекомендации', value: (d) => d.improvementTips }
+  ]
+};
 
-function CopyButton({ text }: { text: string }) {
+const isEmpty = (value: any) =>
+  value == null || value === '' || value === '—' || (Array.isArray(value) && value.length === 0);
+
+const readable = (value: string) => contextLabels[value] || value;
+
+const getPlatformScore = (platformKey: string, platformFit: any) => {
+  return platformFit?.[platformKey]?.score ?? -1;
+};
+
+const normalizeCopyValue = (value: any) => {
+  if (isEmpty(value)) return '';
+  if (Array.isArray(value)) return value.map((item) => String(item)).join('\n');
+  return String(value);
+};
+
+const formatFieldValue = (value: any, label: string) => {
+  if (Array.isArray(value)) {
+    if (label === 'Hashtags') {
+      return value.map((item) => {
+        const text = String(item);
+        return text.startsWith('#') ? text : `#${text}`;
+      });
+    }
+
+    return value.map((item) => String(item));
+  }
+
+  return value;
+};
+
+const getBestPlatform = (platformFit: any, videoFingerprint: any) => {
+  const entries = [
+    { key: 'youtubeVideo', score: getPlatformScore('youtubeVideo', platformFit) },
+    { key: 'youtubeShorts', score: getPlatformScore('youtubeShorts', platformFit) },
+    { key: 'instagramReels', score: getPlatformScore('instagramReels', platformFit) },
+    { key: 'tiktok', score: getPlatformScore('tiktok', platformFit) }
+  ];
+
+  const maxScore = Math.max(...entries.map((item) => item.score));
+  const winners = entries.filter((item) => item.score === maxScore).map((item) => item.key);
+
+  if (winners.length === 1) return winners[0];
+
+  const isHorizontal = String(videoFingerprint?.orientation || '').toLowerCase().includes('horiz');
+  if (isHorizontal && winners.includes('youtubeVideo')) return 'youtubeVideo';
+  if (winners.includes('youtubeShorts')) return 'youtubeShorts';
+  if (winners.includes('youtubeVideo')) return 'youtubeVideo';
+  return winners[0] || 'youtubeShorts';
+};
+
+function CopyButton({ text, label = 'Скопировать' }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   const handleCopy = async () => {
     if (!text) return;
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+
+    try {
+      if (!navigator?.clipboard?.writeText) {
+        setFailed(true);
+        setTimeout(() => setFailed(false), 1500);
+        return;
+      }
+
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setFailed(true);
+      setTimeout(() => setFailed(false), 1500);
+    }
   };
 
   return (
     <button
       onClick={handleCopy}
       disabled={!text}
-      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
     >
-      {copied ? 'Скопировано' : 'Скопировать'}
+      {copied ? 'Скопировано' : failed ? 'Ошибка' : label}
     </button>
   );
 }
@@ -96,25 +218,86 @@ function MetricCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-function PlatformScoreCard({ title, score }: { title: string; score: number }) {
-  const safeScore = Number.isFinite(score) ? Math.max(0, Math.min(100, score)) : 0;
-  return (
-    <article className="rounded-xl border border-slate-200 p-4">
-      <p className="text-sm text-slate-600">{title}</p>
-      <p className="mt-2 text-3xl font-bold text-slate-900">{safeScore}</p>
-      <div className="mt-3 h-2 w-full rounded-full bg-slate-100" aria-hidden>
-        <div className="h-2 rounded-full bg-blue-500" style={{ width: `${safeScore}%` }} />
-      </div>
-      <p className="mt-2 text-xs text-slate-500">{scoreLabel(safeScore)}</p>
-    </article>
-  );
-}
+function SeoPlatformCard({
+  title,
+  data,
+  platformKey,
+  score
+}: {
+  title: string;
+  data: any;
+  platformKey: string;
+  score?: number;
+}) {
+  const rows = (fieldOrder[platformKey] || [])
+    .map((field) => ({ ...field, valueRaw: field.value(data) }))
+    .filter((field) => !isEmpty(field.valueRaw));
 
-function EmptyState() {
+  const packageText = rows
+    .map((row) => `${row.label}: ${normalizeCopyValue(formatFieldValue(row.valueRaw, row.label))}`)
+    .join('\n\n');
+
   return (
-    <section className={cn(cardClass, 'text-center')}>
-      <h2 className="text-lg font-semibold text-slate-900">Загрузите видео для анализа</h2>
-      <p className="mt-2 text-sm text-slate-600">После запуска анализа здесь появятся оценка платформ, проблемы, рекомендации и SEO-пакеты.</p>
+    <section className="rounded-2xl border border-slate-200 bg-white p-5">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-2xl font-bold text-slate-900">{title}</h3>
+          <p className="mt-1 text-sm text-slate-500">{platformMeta[platformKey]?.hint}</p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {Number.isFinite(score) && (
+            <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">Score: {score}</span>
+          )}
+          <CopyButton text={packageText} label="Скопировать пакет" />
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {rows.map((row) => {
+          const formatted = formatFieldValue(row.valueRaw, row.label);
+          const fieldText = normalizeCopyValue(formatted);
+          const useChips = row.kind === 'chips' && Array.isArray(formatted);
+          const useList = Array.isArray(formatted) && !useChips;
+
+          return (
+            <div key={row.label} className="rounded-xl border border-slate-200 p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-slate-700">{row.label}</p>
+                <CopyButton text={fieldText} />
+              </div>
+
+              {useChips && (
+                <div className="flex flex-wrap gap-2">
+                  {formatted.map((item: string, index: number) => {
+                    const chipText = row.label === 'Tags' ? item : item.startsWith('#') ? item : `#${item}`;
+                    return (
+                      <span
+                        key={`${row.label}-${index}`}
+                        className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700"
+                      >
+                        {chipText}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+
+              {useList && (
+                <ul className="list-disc space-y-1 pl-5 text-sm text-slate-900">
+                  {formatted.map((item: string, index: number) => (
+                    <li key={`${row.label}-item-${index}`}>{item}</li>
+                  ))}
+                </ul>
+              )}
+
+              {!Array.isArray(formatted) && (
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-900">{formatted}</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </section>
   );
 }
@@ -126,24 +309,42 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [contextForm, setContextForm] = useState({ userGoal: 'views_and_reach', niche: 'general_video', language: 'ru', geo: '', brandName: '', keywords: '' });
+  const [activePlatform, setActivePlatform] = useState('youtubeShorts');
+  const [lastAutoSelectedJobId, setLastAutoSelectedJobId] = useState<string | null>(null);
+
+  const [contextForm, setContextForm] = useState({
+    userGoal: 'views_and_reach',
+    niche: 'general_video',
+    language: 'ru',
+    geo: '',
+    brandName: '',
+    keywords: ''
+  });
 
   const upload = async () => {
     if (!file || isUploading) return;
+
     setIsUploading(true);
     setError(null);
     setJob(null);
+    setLastAutoSelectedJobId(null);
+
     const form = new FormData();
     form.append('video', file);
     Object.entries(contextForm).forEach(([key, value]) => form.append(key, value));
 
     try {
-      const response = await fetch(`${API_URL}/api/videos/upload`, { method: 'POST', body: form });
+      const response = await fetch(`${API_URL}/api/videos/upload`, {
+        method: 'POST',
+        body: form
+      });
       const data = await response.json();
+
       if (!response.ok) {
         setError(data.error || 'Не удалось загрузить видео');
         return;
       }
+
       setJobId(data.jobId);
     } catch {
       setError('Ошибка сети при загрузке видео');
@@ -155,12 +356,17 @@ export default function Home() {
   const refresh = async (targetJobId?: string) => {
     const id = targetJobId || jobId;
     if (!id || isRefreshing) return;
+
     setIsRefreshing(true);
+
     try {
       const response = await fetch(`${API_URL}/api/jobs/${id}`);
       const data = await response.json();
+
       setJob(data);
-      if (!response.ok) setError(data.error || 'Не удалось получить статус задачи');
+      if (!response.ok) {
+        setError(data.error || 'Не удалось получить статус задачи');
+      }
     } catch {
       setError('Ошибка сети при получении статуса');
     } finally {
@@ -168,43 +374,49 @@ export default function Home() {
     }
   };
 
-  useEffect(() => { if (jobId) refresh(jobId); }, [jobId]);
+  useEffect(() => {
+    if (jobId) refresh(jobId);
+  }, [jobId]);
+
   useEffect(() => {
     if (!jobId || !job || job.status === 'done' || job.status === 'failed') return;
-    const id = setInterval(() => refresh(jobId), 2500);
-    return () => clearInterval(id);
+    const intervalId = setInterval(() => refresh(jobId), 2500);
+    return () => clearInterval(intervalId);
   }, [jobId, job?.status]);
 
   const report = job?.analysis_report;
-  const frames = job?.frames || [];
-  const statusText = useMemo(() => (job?.status ? statusLabels[job.status] || job.status : null), [job?.status]);
-  const issues = report?.detectedIssues || [];
-  const recommendations = report?.recommendations || [];
-  const platformFit = report?.platformFit || {};
   const seoDraft = report?.seoDraft || {};
+  const platformFit = report?.platformFit || {};
   const aiInput = report?.ai_input || {};
+  const videoFingerprint = aiInput?.videoFingerprint || {};
+  const statusText = useMemo(
+    () => (job?.status ? statusLabels[job.status] || job.status : null),
+    [job?.status]
+  );
+
   const fallbackContext = job?.user_context || {};
   const contextSource = {
     ...fallbackContext,
     ...aiInput,
     brandName: aiInput?.brandName || fallbackContext?.brandName || '',
-    keywords: Array.isArray(aiInput?.keywords) && aiInput.keywords.length > 0
-      ? aiInput.keywords
-      : fallbackContext?.keywords || []
+    keywords:
+      Array.isArray(aiInput?.keywords) && aiInput.keywords.length > 0
+        ? aiInput.keywords
+        : fallbackContext?.keywords || []
   };
-  const technical = report?.technical || {};
-  const videoFingerprint = aiInput?.videoFingerprint || {};
-  const contentHints = Array.isArray(aiInput?.contentHints) ? aiInput.contentHints : [];
-  const keywordSet = new Set((contextSource.keywords || []).map((k: string) => String(k).toLowerCase()));
-  const onlyKeywordHints = contentHints.length > 0 && contentHints.every((hint: string) => keywordSet.has(hint.toLowerCase()));
-  const weakVideoHints = contentHints.length === 0 || onlyKeywordHints;
-  const videoAngle = aiInput?.videoAngle || '—';
-  const generationBasis = Array.isArray(aiInput?.generationBasis) ? aiInput.generationBasis.join(', ') : '—';
-  const readableBasis = Array.isArray(aiInput?.generationBasis) ? aiInput.generationBasis.map((item: string) => readableGenerationBasis(item)).join(', ') : '—';
+
+  useEffect(() => {
+    const resolvedJobId = String(job?.id || jobId || '');
+    if (!resolvedJobId || job?.status !== 'done' || lastAutoSelectedJobId === resolvedJobId) return;
+
+    const bestPlatform = getBestPlatform(platformFit, videoFingerprint);
+    setActivePlatform(bestPlatform);
+    setLastAutoSelectedJobId(resolvedJobId);
+  }, [job?.id, job?.status, jobId, lastAutoSelectedJobId, platformFit, videoFingerprint]);
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
-      <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
         <header className="flex items-start justify-between">
           <div>
             <p className="text-2xl font-bold tracking-tight">SEO-GURU</p>
@@ -214,93 +426,80 @@ export default function Home() {
         </header>
 
         <section className={cardClass}>
-          <h1 className="text-2xl font-semibold sm:text-3xl">Загрузите видео — получите SEO-пакеты под платформы</h1>
-          <p className="mt-3 text-sm text-slate-600 sm:text-base">Сервис анализирует ролик, кадры, формат и контекст публикации, а затем готовит тексты для YouTube, Shorts, Instagram Reels и TikTok.</p>
-          <ul className="mt-4 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
-            <li>• Анализ видео</li>
-            <li>• SEO под площадки</li>
-            <li>• Рекомендации по улучшению</li>
-            <li>• Копирование готовых текстов</li>
-          </ul>
-        </section>
-
-        <section className={cardClass}>
           <h2 className="text-lg font-semibold">Настройки анализа</h2>
-          <p className="mt-1 text-sm text-slate-500">Заполните контекст публикации перед загрузкой видео.</p>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            {[{ id: 'goal', label: 'Цель публикации', key: 'userGoal', options: goalOptions, help: 'Выберите приоритет для продвижения.' }, { id: 'niche', label: 'Ниша', key: 'niche', options: nicheOptions, help: 'Тематика контента для более точных рекомендаций.' }, { id: 'language', label: 'Язык', key: 'language', options: languageOptions, help: 'Язык для генерации SEO-текстов.' }].map((field: any) => (
-              <label key={field.id} htmlFor={field.id} className="space-y-1 text-sm">
-                <span className="font-medium text-slate-700">{field.label}</span>
-                <select id={field.id} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" value={(contextForm as any)[field.key]} onChange={(e) => setContextForm((prev: any) => ({ ...prev, [field.key]: e.target.value }))}>
-                  {field.options.map((o: any) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-                <span className="text-xs text-slate-500">{field.help}</span>
-              </label>
-            ))}
-
-            <label htmlFor="geo" className="space-y-1 text-sm">
-              <span className="font-medium text-slate-700">Гео</span>
-              <input id="geo" className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Москва" value={contextForm.geo} onChange={(e) => setContextForm((prev) => ({ ...prev, geo: e.target.value }))} />
-              <span className="text-xs text-slate-500">Город или регион целевой аудитории.</span>
+            <label className="space-y-1 text-sm">
+              <span className="font-medium text-slate-700">Цель публикации</span>
+              <select className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2" value={contextForm.userGoal} onChange={(e) => setContextForm((prev) => ({ ...prev, userGoal: e.target.value }))}>{goalOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
             </label>
-
-            <label htmlFor="brandName" className="space-y-1 text-sm">
-              <span className="font-medium text-slate-700">Бренд / автор</span>
-              <input id="brandName" className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Имя бренда или автора" value={contextForm.brandName} onChange={(e) => setContextForm((prev) => ({ ...prev, brandName: e.target.value }))} />
-              <span className="text-xs text-slate-500">Помогает адаптировать tone of voice.</span>
+            <label className="space-y-1 text-sm">
+              <span className="font-medium text-slate-700">Ниша</span>
+              <select className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2" value={contextForm.niche} onChange={(e) => setContextForm((prev) => ({ ...prev, niche: e.target.value }))}>{nicheOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
             </label>
-
-            <label htmlFor="keywords" className="space-y-1 text-sm sm:col-span-2">
-              <span className="font-medium text-slate-700">Ключевые слова</span>
-              <input id="keywords" className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="например: авто обзор, cinematic" value={contextForm.keywords} onChange={(e) => setContextForm((prev) => ({ ...prev, keywords: e.target.value }))} />
-              <span className="text-xs text-slate-500">Через запятую: темы, продукты, ключевые фразы.</span>
+            <label className="space-y-1 text-sm">
+              <span className="font-medium text-slate-700">Язык</span>
+              <select className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2" value={contextForm.language} onChange={(e) => setContextForm((prev) => ({ ...prev, language: e.target.value }))}>{languageOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
             </label>
-
-            <label htmlFor="video" className="space-y-1 text-sm sm:col-span-2">
+            <label className="space-y-1 text-sm">
               <span className="font-medium text-slate-700">Видео файл</span>
-              <input id="video" type="file" accept="video/*" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-              <span className="text-xs text-slate-500">Поддерживаются распространённые видеоформаты.</span>
+              <input type="file" accept="video/*" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2" onChange={(e) => setFile(e.target.files?.[0] || null)} />
             </label>
           </div>
-
-          <button onClick={upload} disabled={!file || isUploading} className="mt-5 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:bg-blue-300">
-            {isUploading ? 'Загрузка…' : 'Проанализировать видео'}
-          </button>
+          <button onClick={upload} disabled={!file || isUploading} className="mt-5 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white disabled:bg-blue-300">{isUploading ? 'Загрузка…' : 'Проанализировать видео'}</button>
         </section>
 
         {jobId && (
           <section className={cardClass}>
             <p className="text-xs text-slate-500">Job ID: {jobId}</p>
             <p className="mt-1 text-sm">Статус: <span className="font-semibold">{statusText || '—'}</span></p>
-            <button onClick={() => refresh()} disabled={!jobId || isRefreshing} className="mt-3 rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
-              {isRefreshing ? 'Обновление…' : 'Обновить статус'}
-            </button>
+            <button onClick={() => refresh()} disabled={!jobId || isRefreshing} className="mt-3 rounded-lg border border-slate-300 px-3 py-1.5 text-sm">{isRefreshing ? 'Обновление…' : 'Обновить статус'}</button>
           </section>
         )}
 
-        {error && <section className="rounded-2xl border border-red-200 bg-red-50 p-4 text-red-700">{error}</section>}
-        {!job && !error && <EmptyState />}
-
         {job && report && (
           <section className="grid gap-4">
-            <article className={cardClass}><h2 className="text-lg font-semibold">Контекст анализа</h2><div className="mt-3 grid gap-2 text-sm sm:grid-cols-2"><MetricCard label="Цель" value={contextSource.userGoal || 'Не указано'} /><MetricCard label="Ниша" value={contextSource.niche || 'Не указано'} /><MetricCard label="Язык" value={contextSource.language || 'Не указано'} /><MetricCard label="Гео" value={contextSource.geo || 'Не указано'} /><MetricCard label="Бренд" value={contextSource.brandName || 'Не указано'} /><MetricCard label="Ключевые слова" value={(contextSource.keywords || []).join(', ') || 'Не указано'} /></div></article>
+            <article className={cardClass}>
+              <h2 className="text-lg font-semibold">Контекст анализа</h2>
+              <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+                <MetricCard label="Цель" value={readable(contextSource.userGoal) || 'Не указано'} />
+                <MetricCard label="Ниша" value={readable(contextSource.niche) || 'Не указано'} />
+                <MetricCard label="Язык" value={readable(contextSource.language) || 'Не указано'} />
+              </div>
+            </article>
 
-            <article className={cardClass}><h2 className="text-lg font-semibold">Технические параметры</h2><div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><MetricCard label="Длительность" value={technical.durationSec ? `${technical.durationSec} сек` : '—'} /><MetricCard label="Разрешение" value={technical.resolution || '—'} /><MetricCard label="FPS" value={technical.fps ? String(technical.fps) : '—'} /><MetricCard label="Соотношение сторон" value={technical.aspectRatio || '—'} /><MetricCard label="Аудио" value={technical.hasAudio ? 'Да' : 'Нет'} /><MetricCard label="Битрейт" value={technical.bitrate || '—'} /></div></article>
-            <article className={cardClass}><h2 className="text-lg font-semibold">Видео-подсказки</h2><div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><MetricCard label="Orientation" value={videoFingerprint.orientation || '—'} /><MetricCard label="Duration bucket" value={videoFingerprint.durationBucket || '—'} /><MetricCard label="Resolution class" value={videoFingerprint.resolutionClass || '—'} /><MetricCard label="Detected model" value={videoFingerprint.detectedModel || '—'} /><MetricCard label="Primary platform hint" value={videoFingerprint.platformPrimaryHint || '—'} /><MetricCard label="Video angle" value={`${readableVideoAngle(videoAngle)} (${videoAngle})`} /><MetricCard label="Generation basis" value={`${readableBasis} (${generationBasis})`} /><MetricCard label="Content hints" value={contentHints.join(', ') || '—'} /></div>{weakVideoHints && <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Пока сервис использует технический анализ, имя файла и введённый контекст. Визуальное распознавание объектов будет добавлено позже.</p>}</article>
+            <article className={cardClass}>
+              <h2 className="text-lg font-semibold">Видео-подсказки</h2>
+              <div className="mt-3 space-y-2">
+                <p className="text-xl font-semibold">{videoFingerprint.orientation?.includes('horiz') ? 'Горизонтальный формат' : 'Вертикальный короткий ролик'}</p>
+                <p className="text-base">{readable(aiInput?.videoAngle || '') || 'Авто / cinematic'}</p>
+                <p className="text-xs text-slate-500">(technical: {aiInput?.videoAngle || 'n/a'}, basis: {(aiInput?.generationBasis || []).join(', ') || 'n/a'})</p>
+                <div className="flex flex-wrap gap-2">{(aiInput?.contentHints || []).map((hint: string) => <span key={hint} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700">{hint}</span>)}</div>
+              </div>
+            </article>
 
-            <article className={cardClass}><h2 className="text-lg font-semibold">Кадры из видео</h2>{frames.length === 0 ? <p className="mt-2 text-sm text-slate-500">Кадры пока не готовы.</p> : <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{frames.map((f: any) => <div key={f.storageKey} className="overflow-hidden rounded-xl border border-slate-200 bg-white"><img src={`${API_URL}${f.previewUrl}`} alt={`Кадр ${f.filename}`} className="h-28 w-full object-cover" /><div className="p-2"><p className="truncate text-xs text-slate-500">{f.filename}</p><span className="mt-1 inline-block rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700">~{f.approxTimeSec} сек</span></div></div>)}</div>}</article>
+            <article className={cardClass}>
+              <h2 className="text-lg font-semibold">SEO-пакеты по платформам</h2>
+              <div className="mt-4 overflow-x-auto">
+                <div className="flex min-w-max gap-2">
+                  {Object.entries(platformMeta).map(([key, meta]) => (
+                    <button key={key} onClick={() => setActivePlatform(key)} className={`rounded-full px-4 py-2 text-sm ${activePlatform === key ? 'bg-slate-900 text-white' : 'border border-slate-300 bg-white text-slate-700'}`}>
+                      <span>{meta.title}</span>
+                      <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] ${activePlatform === key ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'}`}>{getPlatformScore(key, platformFit)}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-4">
+                {Object.entries(platformMeta).map(([key, meta]) => (
+                  activePlatform === key ? <SeoPlatformCard key={key} title={meta.title} platformKey={key} data={seoDraft[key] || {}} score={getPlatformScore(key, platformFit)} /> : null
+                ))}
+              </div>
+            </article>
 
-            <article className={cardClass}><h2 className="text-lg font-semibold">Оценка платформ</h2><div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><PlatformScoreCard title="YouTube Shorts" score={platformFit.youtubeShorts?.score ?? 0} /><PlatformScoreCard title="YouTube Video" score={platformFit.youtubeVideo?.score ?? 0} /><PlatformScoreCard title="Instagram Reels" score={platformFit.instagramReels?.score ?? 0} /><PlatformScoreCard title="TikTok" score={platformFit.tiktok?.score ?? 0} /></div></article>
-
-            <article className={cardClass}><h2 className="text-lg font-semibold">Проблемы</h2><ul className="mt-2 space-y-2 text-sm text-slate-700">{issues.length === 0 ? <li>Критичных проблем не найдено.</li> : issues.map((issue: string, idx: number) => <li key={idx} className="rounded-lg bg-slate-50 px-3 py-2">{issue}</li>)}</ul></article>
-
-            <article className={cardClass}><h2 className="text-lg font-semibold">Рекомендации</h2><ul className="mt-2 space-y-2 text-sm text-slate-700">{recommendations.length === 0 ? <li>Базовых рекомендаций пока нет.</li> : recommendations.map((rec: string, idx: number) => <li key={idx} className="rounded-lg bg-slate-50 px-3 py-2">{rec}</li>)}</ul></article>
-
-            <article className={cardClass}><h2 className="text-lg font-semibold">AI генерация SEO</h2><p className="mt-2 text-sm text-slate-600">Провайдер: {report.aiProviderUsed || 'mock'} · Fallback: {report.aiFallbackUsed ? 'Да' : 'Нет'}</p>{(report.aiWarnings || []).length > 0 && <ul className="mt-2 space-y-1 text-sm text-amber-700">{report.aiWarnings.map((warning: string, idx: number) => <li key={idx}>• {warning}</li>)}</ul>}</article>
-
-            <article className={cardClass}><h2 className="text-lg font-semibold">SEO-пакеты по платформам</h2><div className="mt-4 grid gap-4">{[['youtubeVideo', 'YouTube Video'], ['youtubeShorts', 'YouTube Shorts'], ['instagramReels', 'Instagram Reels'], ['tiktok', 'TikTok']].map(([key, title]) => {const data = seoDraft[key as string] || {}; const packageText = [`Платформа: ${title}`, `Главный заголовок: ${data.bestTitle || data.caption || ''}`, `Варианты заголовков: ${(data.titleOptions || []).join(' | ')}`, `Описание: ${data.description || data.caption || ''}`, `Хештеги: ${(data.hashtags || []).join(' ')}`, `Теги: ${(data.tags || []).join(', ')}`, `Текст обложки: ${data.coverText || data.thumbnailText || ''}`, `Закреплённый комментарий: ${data.pinnedComment || ''}`, `Hook: ${data.hookText || data.firstLineHook || ''}`, `Alt text: ${data.altText || ''}`, `Story announcement: ${data.storyAnnouncement || ''}`, `Trend angle: ${data.trendAngle || ''}`, `CTA: ${data.cta || ''}`, `Рекомендации: ${(data.improvementTips || []).join(' | ')}`].join('\n\n'); return (<section key={key} className="rounded-xl border border-slate-200 p-4"><div className="flex items-center justify-between"><h3 className="text-base font-semibold">{title}</h3><CopyButton text={packageText} /></div><div className="mt-3 grid gap-3 text-sm"><MetricCard label="Главный заголовок / caption" value={data.bestTitle || data.caption || '—'} /><MetricCard label="Варианты заголовков" value={(data.titleOptions || []).join(' • ') || '—'} /><MetricCard label="Описание" value={data.description || data.caption || '—'} /><MetricCard label="Хештеги" value={(data.hashtags || []).join(' ') || '—'} /><MetricCard label="Теги" value={(data.tags || []).join(', ') || '—'} /><MetricCard label="Текст обложки" value={data.coverText || data.thumbnailText || '—'} /><MetricCard label="Hook text" value={data.hookText || data.firstLineHook || '—'} /><MetricCard label="Alt text" value={data.altText || '—'} /><MetricCard label="Story announcement" value={data.storyAnnouncement || '—'} /><MetricCard label="Trend angle" value={data.trendAngle || '—'} /><MetricCard label="CTA" value={data.cta || '—'} /><MetricCard label="Закреплённый комментарий" value={data.pinnedComment || '—'} /><MetricCard label="Рекомендации" value={(data.improvementTips || []).join(' • ') || '—'} /></div></section>);})}</div></article>
-
-            <details className={cardClass}><summary className="cursor-pointer text-sm font-medium">Показать технический JSON</summary><pre className="mt-3 overflow-x-auto rounded-lg bg-slate-900 p-3 text-xs text-slate-100">{JSON.stringify(job, null, 2)}</pre></details>
+            <details className={cardClass}>
+              <summary className="cursor-pointer text-sm font-medium">Показать технический JSON</summary>
+              <pre className="mt-3 overflow-x-auto rounded-lg bg-slate-900 p-3 text-xs text-slate-100">{JSON.stringify(job, null, 2)}</pre>
+            </details>
           </section>
         )}
       </div>
