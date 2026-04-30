@@ -1,240 +1,273 @@
 'use client';
+
 import { useEffect, useMemo, useState } from 'react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 const statusLabels: Record<string, string> = {
   queued: 'Видео в очереди',
-  processing: 'Идёт анализ видео',
+  processing: 'Идёт анализ',
   done: 'Анализ готов',
   failed: 'Ошибка анализа'
 };
 
-const goals = ['views_and_reach', 'subscribers', 'leads', 'portfolio', 'sales'];
-const niches = ['auto', 'real_estate', 'travel', 'expert_content', 'music_event', 'beauty', 'food', 'education', 'general_video'];
-const languages = ['ru', 'en'];
+const goalOptions = [
+  { value: 'views_and_reach', label: 'Охваты и просмотры' },
+  { value: 'subscribers', label: 'Подписчики' },
+  { value: 'leads', label: 'Заявки / клиенты' },
+  { value: 'portfolio', label: 'Портфолио' },
+  { value: 'sales', label: 'Продажи' }
+];
 
-const copyText = async (text: string | string[] | undefined | null) => {
-  const value = Array.isArray(text) ? text.join(', ') : text || '';
-  if (!value) return;
-  await navigator.clipboard.writeText(value);
+const nicheOptions = [
+  { value: 'auto', label: 'Авто' },
+  { value: 'real_estate', label: 'Недвижимость' },
+  { value: 'travel', label: 'Путешествия' },
+  { value: 'expert_content', label: 'Экспертный контент' },
+  { value: 'music_event', label: 'Музыка / мероприятия' },
+  { value: 'beauty', label: 'Beauty' },
+  { value: 'food', label: 'Еда' },
+  { value: 'education', label: 'Образование' },
+  { value: 'general_video', label: 'Общее видео' }
+];
+
+const languageOptions = [
+  { value: 'ru', label: 'Русский' },
+  { value: 'en', label: 'Английский' }
+];
+
+const cn = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(' ');
+
+const scoreLabel = (score: number) => {
+  if (score >= 80) return 'Отлично подходит';
+  if (score >= 60) return 'Хороший потенциал';
+  if (score >= 40) return 'Нужна адаптация';
+  return 'Слабое соответствие';
 };
 
-const CopyRow = ({ label, value }: { label: string; value: any }) => (
-  <div className="border rounded p-2 space-y-1">
-    <p className="text-sm font-medium">{label}</p>
-    <p className="text-sm whitespace-pre-wrap">{Array.isArray(value) ? value.join(', ') : value || '—'}</p>
-    <button className="text-xs bg-slate-800 text-white px-2 py-1 rounded" onClick={() => copyText(value)}>Скопировать</button>
-  </div>
-);
+const cardClass = 'rounded-2xl border border-slate-200 bg-white p-5 shadow-sm';
 
-const AnalysisContextBlock = ({ aiInput, fallbackContext }: { aiInput: any; fallbackContext: any }) => {
-  const source = Object.keys(aiInput || {}).length > 0 ? aiInput : (fallbackContext || {});
-  return (
-  <section>
-    <h2 className="text-lg font-semibold">Контекст анализа</h2>
-    <ul className="list-disc ml-5">
-      <li>Цель: {source?.userGoal || '—'}</li>
-      <li>Ниша: {source?.niche || '—'}</li>
-      <li>Язык: {source?.language || '—'}</li>
-      <li>Гео: {source?.geo || '—'}</li>
-      <li>Бренд: {source?.brandName || '—'}</li>
-      <li>Ключевые слова: {(source?.keywords || []).join(', ') || '—'}</li>
-    </ul>
-  </section>
-  );
-};
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
 
-const TechnicalBlock = ({ technical }: { technical: any }) => technical && (
-  <section>
-    <h2 className="text-lg font-semibold">Технические параметры</h2>
-    <ul className="list-disc ml-5">
-      <li>Длительность: {technical.durationSec ?? '—'} сек.</li>
-      <li>Разрешение: {technical.resolution || '—'}</li>
-      <li>FPS: {technical.fps || '—'}</li>
-      <li>Соотношение сторон: {technical.aspectRatio || '—'}</li>
-      <li>Аудио: {technical.hasAudio ? 'Да' : 'Нет'}</li>
-      <li>Битрейт: {technical.bitrate || '—'}</li>
-    </ul>
-  </section>
-);
-
-const FramesBlock = ({ frames }: { frames: any[] }) => (
-  <section>
-    <h2 className="text-lg font-semibold">Кадры из видео</h2>
-    {frames.length === 0 ? <p>Кадры пока не готовы.</p> : (
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {frames.map((f: any) => (
-          <div key={f.storageKey} className="border rounded p-2 text-xs space-y-1">
-            <img src={`${API_URL}${f.previewUrl}`} alt={f.filename} className="w-full h-auto rounded" />
-            <p>{f.filename}</p>
-            <p>~{f.approxTimeSec} сек</p>
-          </div>
-        ))}
-      </div>
-    )}
-  </section>
-);
-
-const PlatformFitBlock = ({ platformFit }: { platformFit: any }) => platformFit && (
-  <section>
-    <h2 className="text-lg font-semibold">Оценка платформ</h2>
-    <ul className="list-disc ml-5">
-      <li>YouTube Shorts: {platformFit.youtubeShorts?.score ?? '—'}</li>
-      <li>YouTube Video: {platformFit.youtubeVideo?.score ?? '—'}</li>
-      <li>Instagram Reels: {platformFit.instagramReels?.score ?? '—'}</li>
-      <li>TikTok: {platformFit.tiktok?.score ?? '—'}</li>
-    </ul>
-  </section>
-);
-
-const SeoPlatformCard = ({ title, data }: { title: string; data: any }) => {
-  const copyWholePackage = async () => {
-    const payload = [
-      `Заголовок: ${data.bestTitle || data.caption || ''}`,
-      `Варианты заголовков: ${(data.titleOptions || []).join(' | ')}`,
-      `Описание: ${data.description || data.caption || ''}`,
-      `Хештеги: ${(data.hashtags || []).join(' ')}`,
-      data.tags ? `Теги: ${data.tags.join(', ')}` : '',
-      `Закреплённый комментарий: ${data.pinnedComment || ''}`,
-      `Текст обложки: ${data.coverText || data.thumbnailText || ''}`
-    ].filter(Boolean).join('\n\n');
-    await navigator.clipboard.writeText(payload);
+  const handleCopy = async () => {
+    if (!text) return;
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   };
 
   return (
-    <div className="border rounded p-3 space-y-2">
-      <h3 className="font-semibold">{title}</h3>
-      <button className="text-xs bg-black text-white px-2 py-1 rounded" onClick={copyWholePackage}>Скопировать весь SEO-пакет</button>
-      <CopyRow label="Главный заголовок / текст" value={data.bestTitle || data.caption || '—'} />
-      {data.titleOptions && (
-        <div>
-          <p className="text-sm font-medium">Варианты заголовков</p>
-          <ul className="list-disc ml-5 text-sm">
-            {data.titleOptions.map((t: string, i: number) => <li key={i}>{t}</li>)}
-          </ul>
-        </div>
-      )}
-      <CopyRow label="Описание / caption" value={data.description || data.caption} />
-      <CopyRow label="Хештеги" value={data.hashtags} />
-      {data.tags && <CopyRow label="Теги" value={data.tags} />}
-      <CopyRow label="Текст обложки" value={data.coverText || data.thumbnailText} />
-      <CopyRow label="Закреплённый комментарий" value={data.pinnedComment} />
-      <div>
-        <p className="text-sm font-medium">Рекомендации</p>
-        <ul className="list-disc ml-5 text-sm">
-          {(data.improvementTips || []).map((tip: string, i: number) => <li key={i}>{tip}</li>)}
-        </ul>
-      </div>
+    <button
+      onClick={handleCopy}
+      disabled={!text}
+      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {copied ? 'Скопировано' : 'Скопировать'}
+    </button>
+  );
+}
+
+function MetricCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+      <p className="text-xs text-slate-500">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-slate-900">{value || '—'}</p>
     </div>
   );
-};
+}
+
+function PlatformScoreCard({ title, score }: { title: string; score: number }) {
+  const safeScore = Number.isFinite(score) ? Math.max(0, Math.min(100, score)) : 0;
+  return (
+    <article className="rounded-xl border border-slate-200 p-4">
+      <p className="text-sm text-slate-600">{title}</p>
+      <p className="mt-2 text-3xl font-bold text-slate-900">{safeScore}</p>
+      <div className="mt-3 h-2 w-full rounded-full bg-slate-100" aria-hidden>
+        <div className="h-2 rounded-full bg-blue-500" style={{ width: `${safeScore}%` }} />
+      </div>
+      <p className="mt-2 text-xs text-slate-500">{scoreLabel(safeScore)}</p>
+    </article>
+  );
+}
+
+function EmptyState() {
+  return (
+    <section className={cn(cardClass, 'text-center')}>
+      <h2 className="text-lg font-semibold text-slate-900">Загрузите видео для анализа</h2>
+      <p className="mt-2 text-sm text-slate-600">После запуска анализа здесь появятся оценка платформ, проблемы, рекомендации и SEO-пакеты.</p>
+    </section>
+  );
+}
 
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [job, setJob] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [contextForm, setContextForm] = useState({ userGoal: 'views_and_reach', niche: 'general_video', language: 'ru', geo: '', brandName: '', keywords: '' });
 
   const upload = async () => {
-    if (!file) return;
+    if (!file || isUploading) return;
+    setIsUploading(true);
     setError(null);
     setJob(null);
     const form = new FormData();
     form.append('video', file);
     Object.entries(contextForm).forEach(([key, value]) => form.append(key, value));
-    const response = await fetch(`${API_URL}/api/videos/upload`, { method: 'POST', body: form });
-    const data = await response.json();
-    if (!response.ok) {
-      setError(data.error || 'Не удалось загрузить видео');
-      return;
+
+    try {
+      const response = await fetch(`${API_URL}/api/videos/upload`, { method: 'POST', body: form });
+      const data = await response.json();
+      if (!response.ok) {
+        setError(data.error || 'Не удалось загрузить видео');
+        return;
+      }
+      setJobId(data.jobId);
+    } catch {
+      setError('Ошибка сети при загрузке видео');
+    } finally {
+      setIsUploading(false);
     }
-    setJobId(data.jobId);
   };
 
   const refresh = async (targetJobId?: string) => {
     const id = targetJobId || jobId;
-    if (!id) return;
-    const response = await fetch(`${API_URL}/api/jobs/${id}`);
-    const data = await response.json();
-    setJob(data);
-    if (!response.ok) setError(data.error || 'Не удалось получить статус задачи');
+    if (!id || isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      const response = await fetch(`${API_URL}/api/jobs/${id}`);
+      const data = await response.json();
+      setJob(data);
+      if (!response.ok) setError(data.error || 'Не удалось получить статус задачи');
+    } catch {
+      setError('Ошибка сети при получении статуса');
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   useEffect(() => { if (jobId) refresh(jobId); }, [jobId]);
   useEffect(() => {
     if (!jobId || !job || job.status === 'done' || job.status === 'failed') return;
-    const id = setInterval(() => refresh(jobId), 2000);
+    const id = setInterval(() => refresh(jobId), 2500);
     return () => clearInterval(id);
   }, [jobId, job?.status]);
 
-  const frames = job?.frames || [];
   const report = job?.analysis_report;
-  const technical = report?.technical;
-  const platformFit = report?.platformFit;
+  const frames = job?.frames || [];
   const statusText = useMemo(() => (job?.status ? statusLabels[job.status] || job.status : null), [job?.status]);
   const issues = report?.detectedIssues || [];
   const recommendations = report?.recommendations || [];
+  const platformFit = report?.platformFit || {};
   const seoDraft = report?.seoDraft || {};
-  const aiProviderUsed = report?.aiProviderUsed || 'mock';
-  const aiFallbackUsed = Boolean(report?.aiFallbackUsed);
-  const aiWarnings = report?.aiWarnings || [];
   const aiInput = report?.ai_input || {};
-  const jobContext = job?.user_context || {};
+  const contextSource = Object.keys(aiInput).length > 0 ? aiInput : (job?.user_context || {});
+  const technical = report?.technical || {};
 
   return (
-    <main className="max-w-5xl mx-auto p-6 space-y-4">
-      <h1 className="text-2xl font-bold">Video SEO Analyzer</h1>
+    <main className="min-h-screen bg-slate-50 text-slate-900">
+      <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
+        <header className="flex items-start justify-between">
+          <div>
+            <p className="text-2xl font-bold tracking-tight">SEO-GURU</p>
+            <p className="mt-1 text-sm text-slate-600">AI-анализ видео и SEO для YouTube, Shorts, Reels и TikTok</p>
+          </div>
+          <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">MVP / Local demo</span>
+        </header>
 
-      <section className="border rounded p-3 space-y-2">
-        <h2 className="text-lg font-semibold">Настройки анализа перед загрузкой</h2>
-        <div className="grid md:grid-cols-2 gap-2">
-          <label className="text-sm">Цель публикации<select className="w-full border rounded p-2" value={contextForm.userGoal} onChange={(e) => setContextForm((prev) => ({ ...prev, userGoal: e.target.value }))}>{goals.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-          <label className="text-sm">Ниша<select className="w-full border rounded p-2" value={contextForm.niche} onChange={(e) => setContextForm((prev) => ({ ...prev, niche: e.target.value }))}>{niches.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-          <label className="text-sm">Язык<select className="w-full border rounded p-2" value={contextForm.language} onChange={(e) => setContextForm((prev) => ({ ...prev, language: e.target.value }))}>{languages.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-          <label className="text-sm">Гео<input className="w-full border rounded p-2" placeholder="Тюмень" value={contextForm.geo} onChange={(e) => setContextForm((prev) => ({ ...prev, geo: e.target.value }))} /></label>
-          <label className="text-sm">Бренд / автор<input className="w-full border rounded p-2" placeholder="PROTOPOPOV PRODUCTION" value={contextForm.brandName} onChange={(e) => setContextForm((prev) => ({ ...prev, brandName: e.target.value }))} /></label>
-          <label className="text-sm md:col-span-2">Ключевые слова<input className="w-full border rounded p-2" placeholder="BMW X5, авто съёмка, cinematic car edit" value={contextForm.keywords} onChange={(e) => setContextForm((prev) => ({ ...prev, keywords: e.target.value }))} /></label>
-        </div>
-      </section>
+        <section className={cardClass}>
+          <h1 className="text-2xl font-semibold sm:text-3xl">Загрузите видео — получите SEO-пакеты под платформы</h1>
+          <p className="mt-3 text-sm text-slate-600 sm:text-base">Сервис анализирует ролик, кадры, формат и контекст публикации, а затем готовит тексты для YouTube, Shorts, Instagram Reels и TikTok.</p>
+          <ul className="mt-4 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
+            <li>• Анализ видео</li>
+            <li>• SEO под площадки</li>
+            <li>• Рекомендации по улучшению</li>
+            <li>• Копирование готовых текстов</li>
+          </ul>
+        </section>
 
-      <input type="file" accept="video/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-      <div className="flex gap-2">
-        <button className="bg-blue-600 text-white px-4 py-2 rounded" onClick={upload}>Upload</button>
-        <button className="bg-slate-700 text-white px-4 py-2 rounded" onClick={() => refresh()} disabled={!jobId}>Refresh status</button>
+        <section className={cardClass}>
+          <h2 className="text-lg font-semibold">Настройки анализа</h2>
+          <p className="mt-1 text-sm text-slate-500">Заполните контекст публикации перед загрузкой видео.</p>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            {[{ id: 'goal', label: 'Цель публикации', key: 'userGoal', options: goalOptions, help: 'Выберите приоритет для продвижения.' }, { id: 'niche', label: 'Ниша', key: 'niche', options: nicheOptions, help: 'Тематика контента для более точных рекомендаций.' }, { id: 'language', label: 'Язык', key: 'language', options: languageOptions, help: 'Язык для генерации SEO-текстов.' }].map((field: any) => (
+              <label key={field.id} htmlFor={field.id} className="space-y-1 text-sm">
+                <span className="font-medium text-slate-700">{field.label}</span>
+                <select id={field.id} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" value={(contextForm as any)[field.key]} onChange={(e) => setContextForm((prev: any) => ({ ...prev, [field.key]: e.target.value }))}>
+                  {field.options.map((o: any) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+                <span className="text-xs text-slate-500">{field.help}</span>
+              </label>
+            ))}
+
+            <label htmlFor="geo" className="space-y-1 text-sm">
+              <span className="font-medium text-slate-700">Гео</span>
+              <input id="geo" className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Москва" value={contextForm.geo} onChange={(e) => setContextForm((prev) => ({ ...prev, geo: e.target.value }))} />
+              <span className="text-xs text-slate-500">Город или регион целевой аудитории.</span>
+            </label>
+
+            <label htmlFor="brandName" className="space-y-1 text-sm">
+              <span className="font-medium text-slate-700">Бренд / автор</span>
+              <input id="brandName" className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Имя бренда или автора" value={contextForm.brandName} onChange={(e) => setContextForm((prev) => ({ ...prev, brandName: e.target.value }))} />
+              <span className="text-xs text-slate-500">Помогает адаптировать tone of voice.</span>
+            </label>
+
+            <label htmlFor="keywords" className="space-y-1 text-sm sm:col-span-2">
+              <span className="font-medium text-slate-700">Ключевые слова</span>
+              <input id="keywords" className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="например: авто обзор, cinematic" value={contextForm.keywords} onChange={(e) => setContextForm((prev) => ({ ...prev, keywords: e.target.value }))} />
+              <span className="text-xs text-slate-500">Через запятую: темы, продукты, ключевые фразы.</span>
+            </label>
+
+            <label htmlFor="video" className="space-y-1 text-sm sm:col-span-2">
+              <span className="font-medium text-slate-700">Видео файл</span>
+              <input id="video" type="file" accept="video/*" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+              <span className="text-xs text-slate-500">Поддерживаются распространённые видеоформаты.</span>
+            </label>
+          </div>
+
+          <button onClick={upload} disabled={!file || isUploading} className="mt-5 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:bg-blue-300">
+            {isUploading ? 'Загрузка…' : 'Проанализировать видео'}
+          </button>
+        </section>
+
+        {jobId && (
+          <section className={cardClass}>
+            <p className="text-xs text-slate-500">Job ID: {jobId}</p>
+            <p className="mt-1 text-sm">Статус: <span className="font-semibold">{statusText || '—'}</span></p>
+            <button onClick={() => refresh()} disabled={!jobId || isRefreshing} className="mt-3 rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
+              {isRefreshing ? 'Обновление…' : 'Обновить статус'}
+            </button>
+          </section>
+        )}
+
+        {error && <section className="rounded-2xl border border-red-200 bg-red-50 p-4 text-red-700">{error}</section>}
+        {!job && !error && <EmptyState />}
+
+        {job && report && (
+          <section className="grid gap-4">
+            <article className={cardClass}><h2 className="text-lg font-semibold">Контекст анализа</h2><div className="mt-3 grid gap-2 text-sm sm:grid-cols-2"><MetricCard label="Цель" value={contextSource.userGoal || '—'} /><MetricCard label="Ниша" value={contextSource.niche || '—'} /><MetricCard label="Язык" value={contextSource.language || '—'} /><MetricCard label="Гео" value={contextSource.geo || '—'} /><MetricCard label="Бренд" value={contextSource.brandName || '—'} /><MetricCard label="Ключевые слова" value={(contextSource.keywords || []).join(', ') || '—'} /></div></article>
+
+            <article className={cardClass}><h2 className="text-lg font-semibold">Технические параметры</h2><div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><MetricCard label="Длительность" value={technical.durationSec ? `${technical.durationSec} сек` : '—'} /><MetricCard label="Разрешение" value={technical.resolution || '—'} /><MetricCard label="FPS" value={technical.fps ? String(technical.fps) : '—'} /><MetricCard label="Соотношение сторон" value={technical.aspectRatio || '—'} /><MetricCard label="Аудио" value={technical.hasAudio ? 'Да' : 'Нет'} /><MetricCard label="Битрейт" value={technical.bitrate || '—'} /></div></article>
+
+            <article className={cardClass}><h2 className="text-lg font-semibold">Кадры из видео</h2>{frames.length === 0 ? <p className="mt-2 text-sm text-slate-500">Кадры пока не готовы.</p> : <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{frames.map((f: any) => <div key={f.storageKey} className="overflow-hidden rounded-xl border border-slate-200 bg-white"><img src={`${API_URL}${f.previewUrl}`} alt={`Кадр ${f.filename}`} className="h-28 w-full object-cover" /><div className="p-2"><p className="truncate text-xs text-slate-500">{f.filename}</p><span className="mt-1 inline-block rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700">~{f.approxTimeSec} сек</span></div></div>)}</div>}</article>
+
+            <article className={cardClass}><h2 className="text-lg font-semibold">Оценка платформ</h2><div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><PlatformScoreCard title="YouTube Shorts" score={platformFit.youtubeShorts?.score ?? 0} /><PlatformScoreCard title="YouTube Video" score={platformFit.youtubeVideo?.score ?? 0} /><PlatformScoreCard title="Instagram Reels" score={platformFit.instagramReels?.score ?? 0} /><PlatformScoreCard title="TikTok" score={platformFit.tiktok?.score ?? 0} /></div></article>
+
+            <article className={cardClass}><h2 className="text-lg font-semibold">Проблемы</h2><ul className="mt-2 space-y-2 text-sm text-slate-700">{issues.length === 0 ? <li>Критичных проблем не найдено.</li> : issues.map((issue: string, idx: number) => <li key={idx} className="rounded-lg bg-slate-50 px-3 py-2">{issue}</li>)}</ul></article>
+
+            <article className={cardClass}><h2 className="text-lg font-semibold">Рекомендации</h2><ul className="mt-2 space-y-2 text-sm text-slate-700">{recommendations.length === 0 ? <li>Базовых рекомендаций пока нет.</li> : recommendations.map((rec: string, idx: number) => <li key={idx} className="rounded-lg bg-slate-50 px-3 py-2">{rec}</li>)}</ul></article>
+
+            <article className={cardClass}><h2 className="text-lg font-semibold">AI генерация SEO</h2><p className="mt-2 text-sm text-slate-600">Провайдер: {report.aiProviderUsed || 'mock'} · Fallback: {report.aiFallbackUsed ? 'Да' : 'Нет'}</p>{(report.aiWarnings || []).length > 0 && <ul className="mt-2 space-y-1 text-sm text-amber-700">{report.aiWarnings.map((warning: string, idx: number) => <li key={idx}>• {warning}</li>)}</ul>}</article>
+
+            <article className={cardClass}><h2 className="text-lg font-semibold">SEO-пакеты по платформам</h2><div className="mt-4 grid gap-4">{[['youtubeVideo', 'YouTube Video'], ['youtubeShorts', 'YouTube Shorts'], ['instagramReels', 'Instagram Reels'], ['tiktok', 'TikTok']].map(([key, title]) => {const data = seoDraft[key as string] || {}; const packageText = [`Платформа: ${title}`, `Главный заголовок: ${data.bestTitle || data.caption || ''}`, `Варианты заголовков: ${(data.titleOptions || []).join(' | ')}`, `Описание: ${data.description || data.caption || ''}`, `Хештеги: ${(data.hashtags || []).join(' ')}`, `Теги: ${(data.tags || []).join(', ')}`, `Текст обложки: ${data.coverText || data.thumbnailText || ''}`, `Закреплённый комментарий: ${data.pinnedComment || ''}`, `Рекомендации: ${(data.improvementTips || []).join(' | ')}`].join('\n\n'); return (<section key={key} className="rounded-xl border border-slate-200 p-4"><div className="flex items-center justify-between"><h3 className="text-base font-semibold">{title}</h3><CopyButton text={packageText} /></div><div className="mt-3 grid gap-3 text-sm"><MetricCard label="Главный заголовок / caption" value={data.bestTitle || data.caption || '—'} /><MetricCard label="Варианты заголовков" value={(data.titleOptions || []).join(' • ') || '—'} /><MetricCard label="Описание" value={data.description || data.caption || '—'} /><MetricCard label="Хештеги" value={(data.hashtags || []).join(' ') || '—'} /><MetricCard label="Теги" value={(data.tags || []).join(', ') || '—'} /><MetricCard label="Текст обложки" value={data.coverText || data.thumbnailText || '—'} /><MetricCard label="Закреплённый комментарий" value={data.pinnedComment || '—'} /><MetricCard label="Рекомендации" value={(data.improvementTips || []).join(' • ') || '—'} /></div></section>);})}</div></article>
+
+            <details className={cardClass}><summary className="cursor-pointer text-sm font-medium">Показать технический JSON</summary><pre className="mt-3 overflow-x-auto rounded-lg bg-slate-900 p-3 text-xs text-slate-100">{JSON.stringify(job, null, 2)}</pre></details>
+          </section>
+        )}
       </div>
-
-      {jobId && <p>Job ID: {jobId}</p>}
-      {error && <p className="text-red-600">{error}</p>}
-
-      {job && (
-        <div className="bg-white rounded p-4 shadow space-y-6">
-          <section><h2 className="text-lg font-semibold">Статус задачи</h2><p><b>{statusText}</b></p></section>
-          <AnalysisContextBlock aiInput={aiInput} fallbackContext={jobContext} />
-          <TechnicalBlock technical={technical} />
-          <FramesBlock frames={frames} />
-          <PlatformFitBlock platformFit={platformFit} />
-          <section><h2 className="text-lg font-semibold">Проблемы</h2><ul className="list-disc ml-5">{issues.length === 0 ? <li>Критичных проблем не найдено.</li> : issues.map((issue: string, idx: number) => <li key={idx}>{issue}</li>)}</ul></section>
-          <section><h2 className="text-lg font-semibold">Рекомендации</h2><ul className="list-disc ml-5">{recommendations.length === 0 ? <li>Базовых рекомендаций пока нет.</li> : recommendations.map((rec: string, idx: number) => <li key={idx}>{rec}</li>)}</ul></section>
-
-          <section className="space-y-2">
-            <h2 className="text-lg font-semibold">AI генерация SEO</h2>
-            <p className="text-sm text-slate-600">AI provider: {aiProviderUsed} · Fallback: {aiFallbackUsed ? 'yes' : 'no'}</p>
-            {aiWarnings.length > 0 && <ul className="list-disc ml-5 text-sm text-amber-700">{aiWarnings.map((warning: string, idx: number) => <li key={idx}>{warning}</li>)}</ul>}
-          </section>
-
-          <section className="space-y-4">
-            <h2 className="text-lg font-semibold">SEO-пакеты по платформам</h2>
-            {[
-              ['youtubeVideo', 'YouTube видео'],
-              ['youtubeShorts', 'YouTube Shorts'],
-              ['instagramReels', 'Instagram Reels'],
-              ['tiktok', 'TikTok']
-            ].map(([key, title]) => <SeoPlatformCard key={key} title={title} data={seoDraft[key as string] || {}} />)}
-          </section>
-        </div>
-      )}
     </main>
   );
 }
