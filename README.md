@@ -122,3 +122,10 @@ python apps/worker/worker.py  # background consumer
 - Backend/API контракт не менялся.
 
 - PR13: улучшен UX отображения SEO-пакетов (tabs, скрытие пустых полей, chips, copy buttons).
+
+
+## PR13 / SEO results UX
+- tabs
+- hidden empty fields
+- chips
+- copy buttons
