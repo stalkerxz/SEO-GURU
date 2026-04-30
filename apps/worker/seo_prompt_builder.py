@@ -19,6 +19,8 @@ def build_ai_video_analysis_prompt(ai_input: Dict[str, Any]) -> str:
         'использовать нерелевантные хештеги. Для Shorts/Reels/TikTok используй 5–8 хештегов. '
         'Верни только валидный JSON без markdown. Тексты должны быть готовы к копированию и публикации. '
         'Если бренд указан — аккуратно используй его в описании/CTA. Если гео указано — добавляй его уместно для локального продвижения. '
+        'Используй videoFingerprint, contentHints и frameManifest для video-specific результата по конкретному ролику. '
+        'Если визуальный контент не распознан, не выдумывай объекты и сцены — опирайся только на технические и контекстные hints. '
         f'\n\nВходные данные (JSON):\n{ai_input}'
     )
 
@@ -32,5 +34,8 @@ def build_platform_seo_prompt(platform: str, ai_input: Dict[str, Any]) -> str:
         'Для Shorts/Reels/TikTok используй максимум 5–8 хештегов. '
         'Верни только валидный JSON, структура должна строго соответствовать нужной платформе. '
         'Сделай тексты готовыми к публикации. Бренд и гео используй только уместно. '
+        'SEO must be specific to this exact video, not only to user keywords. '
+        'Use videoFingerprint and contentHints. '
+        'If visual content is unknown, do not invent objects; use filename/context hints carefully. '
         f'\n\nПлатформа: {platform}\nВходные данные (JSON):\n{ai_input}'
     )
