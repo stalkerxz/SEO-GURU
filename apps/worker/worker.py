@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import subprocess
 import tempfile
 import time
@@ -65,6 +66,8 @@ def build_analysis_report(duration, width, height, fps, has_audio, bitrate, fram
     aspect_ratio = f"{width}:{height}" if width and height else None
     detected_issues = []
     recommendations = []
+    niche = user_context.get('niche', 'general_video')
+    goal = user_context.get('userGoal', 'views_and_reach')
 
     shorts_score = 50
     reels_score = 50
@@ -116,6 +119,15 @@ def build_analysis_report(duration, width, height, fps, has_audio, bitrate, fram
     if is_horizontal and duration <= 180:
         detected_issues.append('Горизонтальный формат ограничивает эффективность Shorts/Reels/TikTok.')
         recommendations.append('Сделайте вертикальную адаптацию 9:16 для коротких платформ.')
+    if niche == 'auto' and duration <= 30:
+        recommendations.extend([
+            'Добавьте сильный текстовый хук в первые 0.5 секунды (например: DRIFT MODE / BMW X5).',
+            'Используйте самый читаемый кадр как обложку (контрастный авто-ракурс, 2–4 слова на обложке).',
+            'Для TikTok/Reels держите монтаж в диапазоне 12–18 секунд.',
+            'Для YouTube обычного видео подготовьте отдельную длинную версию или публикуйте как Shorts.'
+        ])
+        if goal == 'views_and_reach':
+            recommendations.append('Добавьте CTA-вопрос в закреплённый комментарий для роста обсуждения.')
 
     shorts_score = max(0, min(100, shorts_score))
     reels_score = max(0, min(100, reels_score))
@@ -193,26 +205,45 @@ def _default_user_context():
     }
 
 
+def _extract_filename_hints(original_filename: str) -> dict:
+    lowered = (original_filename or '').lower()
+    tokens = [x for x in re.split(r'[^a-zа-я0-9]+', lowered, flags=re.IGNORECASE) if x]
+    model = ''
+    if 'bmw' in tokens:
+        for candidate in ('x3', 'x5'):
+            if candidate in tokens:
+                model = f'BMW {candidate.upper()}'
+                break
+    return {'tokens': tokens[:12], 'detectedModel': model}
+
+
 def get_job_context(job_id: str):
     conn = psycopg2.connect(DATABASE_URL)
     cur = conn.cursor()
-    cur.execute('SELECT user_context FROM video_jobs WHERE id=%s', (job_id,))
+    cur.execute('SELECT user_context, filename FROM video_jobs WHERE id=%s', (job_id,))
     row = cur.fetchone()
     cur.close()
     conn.close()
 
     default_context = _default_user_context()
-    if not row or not row[0] or not isinstance(row[0], dict):
+    if not row:
         return default_context
 
-    raw = row[0]
+    raw = row[0] if row[0] else {}
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError:
+            raw = {}
+    if not isinstance(raw, dict):
+        raw = {}
     keywords = raw.get('keywords', [])
     if isinstance(keywords, str):
         keywords = [x.strip() for x in keywords.split(',') if x.strip()]
     elif not isinstance(keywords, list):
         keywords = []
 
-    return {
+    context = {
         'userGoal': raw.get('userGoal') or default_context['userGoal'],
         'niche': raw.get('niche') or default_context['niche'],
         'language': raw.get('language') or default_context['language'],
@@ -220,6 +251,10 @@ def get_job_context(job_id: str):
         'brandName': raw.get('brandName') or '',
         'keywords': [str(x).strip() for x in keywords if str(x).strip()],
     }
+    original_filename = row[1] or ''
+    context['originalFilename'] = original_filename
+    context['extractedFilenameHints'] = _extract_filename_hints(original_filename)
+    return context
 def analyze_file(file_path: str, job_id: str, user_context):
     meta = ffprobe_json(file_path)
     vstream = next((s for s in meta.get('streams', []) if s.get('codec_type') == 'video'), {})
@@ -256,6 +291,34 @@ def analyze_file(file_path: str, job_id: str, user_context):
         bitrate=meta.get('format', {}).get('bit_rate'),
         frames=frames,
         user_context=user_context,
+    )
+    analysis_report['ai_input']['originalFilename'] = user_context.get('originalFilename', '')
+    analysis_report['ai_input']['extractedFilenameHints'] = user_context.get('extractedFilenameHints', {})
+    print(
+        '[worker][context]',
+        json.dumps({
+            'job_id': job_id,
+            'user_context': {
+                'userGoal': user_context.get('userGoal', ''),
+                'niche': user_context.get('niche', ''),
+                'language': user_context.get('language', ''),
+                'geo': user_context.get('geo', ''),
+                'brandName': user_context.get('brandName', ''),
+                'keywords': user_context.get('keywords', []),
+                'originalFilename': user_context.get('originalFilename', ''),
+                'extractedFilenameHints': user_context.get('extractedFilenameHints', {})
+            },
+            'ai_input': {
+                'userGoal': analysis_report['ai_input'].get('userGoal', ''),
+                'niche': analysis_report['ai_input'].get('niche', ''),
+                'language': analysis_report['ai_input'].get('language', ''),
+                'geo': analysis_report['ai_input'].get('geo', ''),
+                'brandName': analysis_report['ai_input'].get('brandName', ''),
+                'keywords': analysis_report['ai_input'].get('keywords', []),
+                'originalFilename': analysis_report['ai_input'].get('originalFilename', ''),
+                'extractedFilenameHints': analysis_report['ai_input'].get('extractedFilenameHints', {})
+            }
+        }, ensure_ascii=False)
     )
 
     seo_draft, ai_provider_used, ai_fallback_used, ai_warnings = generate_seo_packages(analysis_report)
