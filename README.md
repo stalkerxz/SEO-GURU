@@ -106,9 +106,9 @@ python apps/worker/worker.py  # background consumer
 - Функциональность сервиса не изменялась: backend-логика, worker-логика и API-контракты сохранены.
 - Улучшены UX-состояния загрузки/ожидания/ошибки/готовности и удобство копирования SEO-контента.
 
-## PR10 / Video-aware SEO hints and fingerprint
+## PR10 / Video-angle aware mock SEO differentiation
 - SEO-генерация стала `video-aware`: worker формирует `videoFingerprint` и `contentHints` на основе технических данных, имени файла, контекста и манифеста кадров.
 - В `ai_input` добавлены `frameManifest`, `videoFingerprint`, `contentHints`, чтобы prompt-builder и mock SEO учитывали конкретный ролик, а не только user context.
-- Mock SEO для auto-ниши теперь различается по углам: drift/phonk/review/sale/night/cinematic + generic варианты.
-- Frontend показывает блок «Видео-подсказки» (orientation, duration bucket, resolution class, detected model, platform hint, content hints), чтобы объяснить логику SEO.
-- Ограничение текущей версии: реального computer vision/распознавания объектов пока нет; выводы строятся по техническим и контекстным признакам.
+- Mock SEO теперь строится от `videoAngle` (auto/event/horizontal/square/vertical/generic), чтобы разные видео с одинаковым user context получали разные SEO-пакеты.
+- Frontend показывает `videoAngle` и `generationBasis` в блоке «Видео-подсказки», чтобы было видно источники различий (technical fingerprint, filename hints, user keywords, mixed context).
+- Ограничение текущей версии: computer vision/распознавания объектов пока нет, поэтому выводы строятся только по technical fingerprint, filename hints, user keywords и platform score.

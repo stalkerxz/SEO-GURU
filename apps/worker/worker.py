@@ -11,6 +11,7 @@ import psycopg2
 import redis
 
 from ai_seo_service import generate_seo_packages
+from seo_mock_generator import build_video_angle
 
 REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379')
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://video:video@localhost:5432/video_seo')
@@ -172,6 +173,23 @@ def build_analysis_report(duration, width, height, fps, has_audio, bitrate, fram
         'visualRhythmHint': visual_rhythm_hint,
         'platformPrimaryHint': platform_primary_hint
     }
+    ai_meta = {
+        'niche': niche,
+        'keywords': user_context.get('keywords', []),
+        'content_hints': content_hints,
+        'video_fingerprint': video_fingerprint,
+        'platform_fit': {
+            'youtubeShorts': shorts_score,
+            'youtubeVideo': youtube_score,
+            'instagramReels': reels_score,
+            'tiktok': tiktok_score
+        },
+        'original_filename': user_context.get('originalFilename', ''),
+        'filename_hints': user_context.get('extractedFilenameHints', {}),
+        'technical': technical_summary
+    }
+    video_angle = build_video_angle(ai_meta)
+    generation_basis = _generation_basis(user_context, video_fingerprint)
 
     return {
         'summary': summary,
@@ -206,6 +224,8 @@ def build_analysis_report(duration, width, height, fps, has_audio, bitrate, fram
                 'instagramReels': reels_score,
                 'tiktok': tiktok_score
             },
+            'videoAngle': video_angle,
+            'generationBasis': generation_basis,
             'detectedIssues': detected_issues,
             'recommendations': recommendations,
             'userGoal': user_context.get('userGoal', 'views_and_reach'),
@@ -296,6 +316,19 @@ def _build_content_hints(user_context: dict, technical_summary: dict) -> list[st
     }
     return [hint for hint, terms in hint_rules.items() if any(term in text for term in terms)]
 
+
+
+
+def _generation_basis(user_context: dict, video_fingerprint: dict) -> list[str]:
+    basis = ['technical_fingerprint']
+    filename_tokens = (user_context.get('extractedFilenameHints', {}) or {}).get('tokens', [])
+    if user_context.get('originalFilename') or filename_tokens:
+        basis.append('filename_hints')
+    if user_context.get('keywords'):
+        basis.append('user_keywords')
+    if len(basis) > 1:
+        basis.append('mixed_context')
+    return basis
 
 def get_job_context(job_id: str):
     conn = psycopg2.connect(DATABASE_URL)
