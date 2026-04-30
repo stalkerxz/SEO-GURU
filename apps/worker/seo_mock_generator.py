@@ -24,6 +24,8 @@ def _contextual_meta(ai_input: Dict[str, Any]) -> Dict[str, Any]:
         'technical': ai_input.get('technicalSummary', {}),
         'geo': ai_input.get('geo', ''),
         'filename_hints': ai_input.get('extractedFilenameHints', {}),
+        'video_fingerprint': ai_input.get('videoFingerprint', {}),
+        'content_hints': ai_input.get('contentHints', []),
     }
 
 
@@ -53,6 +55,23 @@ def _common_tips(base: List[str], meta: Dict[str, Any]) -> List[str]:
     return tips
 
 
+def build_video_specific_angle(meta: Dict[str, Any]) -> str:
+    hints = set(meta.get('content_hints') or [])
+    if meta.get('niche') == 'auto':
+        if 'drift' in hints and 'phonk_music' in hints:
+            return 'auto_drift_phonk'
+        if 'review' in hints:
+            return 'auto_review'
+        if 'sale_video' in hints:
+            return 'auto_sale'
+        if 'night_scene' in hints:
+            return 'auto_night'
+        if 'cinematic_style' in hints:
+            return 'auto_cinematic'
+        return 'generic_auto'
+    return 'generic_video'
+
+
 def generate_mock_seo_package(analysis_report: Dict[str, Any], platform: str) -> Dict[str, Any]:
     ai_input = analysis_report.get('ai_input', {})
     _ = build_ai_video_analysis_prompt(ai_input)
@@ -62,13 +81,20 @@ def generate_mock_seo_package(analysis_report: Dict[str, Any], platform: str) ->
     duration = float(technical.get('durationSec') or 0)
     width, height = _parse_resolution(technical.get('resolution'))
     vertical = bool(width and height and height > width)
+    meta = _contextual_meta(ai_input)
     base_tips = ['Усильте хук в первые 1–3 секунды.', 'Добавьте более ясный CTA в конце ролика.']
+    video_fingerprint = meta.get('video_fingerprint') or {}
+    content_hints = set(meta.get('content_hints') or [])
+    angle = build_video_specific_angle(meta)
     if not vertical:
         base_tips.append('Подготовьте вертикальную версию 9:16 для short-form платформ.')
+    if video_fingerprint.get('resolutionClass') == 'low' or video_fingerprint.get('orientation') == 'square':
+        base_tips.append('Текущий формат/разрешение слабо подходит для Reels/TikTok/Shorts: лучше 9:16 и минимум HD.')
     if duration > 180:
         base_tips.append('Сделайте короткую версию до 60–180 секунд.')
+    if duration < 10:
+        base_tips.append('Это очень короткий хук: усилите первые 0.5 секунды самым контрастным моментом.')
 
-    meta = _contextual_meta(ai_input)
     tips = _common_tips(base_tips, meta)
     niche_prefix = 'Авто' if meta['niche'] == 'auto' else 'Контент'
     kw = ', '.join(meta['keywords'][:3]) if isinstance(meta['keywords'], list) and meta['keywords'] else 'видео'
@@ -81,21 +107,27 @@ def generate_mock_seo_package(analysis_report: Dict[str, Any], platform: str) ->
         brand_line = f" от {meta['brand']}" if meta['brand'] else ''
         short_video_hint = float(meta.get('technical', {}).get('durationSec') or 0) <= 60
         auto_hash_ru = ['#АвтоВидео', '#АвтоСъемка']
+        duration_phrase = 'динамичный фрагмент' if duration > 30 else 'короткий ролик'
         if platform == 'youtubeShorts':
-            titles = [
-                f'{subject} Drift Mode | Авто Shorts',
-                f'{subject} в cinematic стиле',
-                f'Drift edit под phonk | {subject}',
-                f'{subject} — стиль и дым',
-                f'{subject} за 15 секунд'
-            ]
+            if angle == 'auto_drift_phonk':
+                titles = [f'{subject} Drift Mode под phonk', f'{subject} drift / phonk edit', f'{subject} — дым и контроль']
+            elif angle == 'auto_review':
+                titles = [f'{subject}: быстрый обзор деталей', f'{subject} — мнение и ключевые фишки', f'{subject} review short']
+            elif angle == 'auto_sale':
+                titles = [f'Видео для продажи {subject}: что показать первым', f'{subject} на продажу — состояние и детали', f'{subject} sale preview']
+            elif angle == 'auto_night':
+                titles = [f'{subject} — ночной cinematic edit', f'{subject} в city lights', f'Night drive short | {subject}']
+            elif angle == 'auto_cinematic':
+                titles = [f'{subject} в cinematic стиле', f'Cinematic car edit | {subject}', f'{subject} — атмосферный проезд']
+            else:
+                titles = [f'{subject} авто-ролик в cinematic стиле', f'{subject} short car edit', f'{subject} динамичный монтаж']
             return {
                 'titleOptions': titles,
                 'bestTitle': titles[0],
-                'description': f'Короткий авто-ролик{geo_tag}{brand_line}. Снято в стиле cinematic/drift с упором на удержание первых секунд.',
-                'hashtags': ['#Shorts', '#BMW', f"#{subject.replace(' ', '')}", '#Drift', *auto_hash_ru][:6],
+                'description': f'{duration_phrase.capitalize()} {geo_tag}{brand_line}. Упор на video-specific подачу с учётом технических и контекстных hints.',
+                'hashtags': ['#Shorts', '#BMW', f"#{subject.replace(' ', '')}", '#Drift' if 'drift' in content_hints else '#CarEdit', '#driftmode' if 'drift' in content_hints else '#Cinematic', *auto_hash_ru][:7],
                 'coverText': f'{subject} / DRIFT MODE',
-                'pinnedComment': 'Какой стиль заходит больше — cinematic или drift edit?',
+                'pinnedComment': 'Оставить больше дыма или cinematic-проезды?' if 'drift' in content_hints else 'Какой стиль заходит больше — cinematic или drive edit?',
                 'improvementTips': tips
             }
         if platform == 'instagramReels':
@@ -108,10 +140,10 @@ def generate_mock_seo_package(analysis_report: Dict[str, Any], platform: str) ->
             }
         if platform == 'tiktok':
             return {
-                'caption': f'{subject} + drift mode? Проверим залетит ли 🔥',
-                'hookText': f'{subject} + drift mode?',
-                'trendAngle': 'phonk / drift / cinematic car edit',
-                'hashtags': ['#bmw', '#drift', '#caredit', '#tiktokauto', '#phonk', '#автосъемка'],
+                'caption': f'{subject} + {"phonk drift" if "phonk_music" in content_hints else "car edit"}? Проверим залетит ли 🔥',
+                'hookText': f'{subject} + {"drift mode" if "drift" in content_hints else "cinematic mode"}?',
+                'trendAngle': 'phonk / drift / cinematic car edit' if 'phonk_music' in content_hints else angle,
+                'hashtags': ['#bmw', '#drift' if 'drift' in content_hints else '#caredit', '#caredit', '#tiktokauto', '#phonk' if 'phonk_music' in content_hints else '#cinematic', '#автосъемка'],
                 'pinnedComment': 'Сделать part 2 с ночной съёмкой?',
                 'improvementTips': tips
             }

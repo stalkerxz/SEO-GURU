@@ -135,17 +135,47 @@ def build_analysis_report(duration, width, height, fps, has_audio, bitrate, fram
     youtube_score = max(0, min(100, youtube_score))
 
     summary = 'Базовый технический анализ завершен. Подготовлен черновик платформенной оценки и SEO-структура.'
+    technical_summary = {
+        'durationSec': duration,
+        'resolution': f'{width}x{height}' if width and height else None,
+        'fps': fps,
+        'aspectRatio': aspect_ratio,
+        'hasAudio': has_audio,
+        'bitrate': bitrate
+    }
+    content_hints = _build_content_hints(user_context, technical_summary)
+    orientation = _orientation(width, height)
+    if orientation == 'vertical' and duration <= 180:
+        platform_primary_hint = 'shorts_reels_tiktok'
+    elif orientation == 'horizontal' and duration > 60:
+        platform_primary_hint = 'youtube_video'
+    else:
+        platform_primary_hint = 'needs_adaptation'
+    if len(frames) <= 2:
+        visual_rhythm_hint = 'static_or_low_sample'
+    elif duration > 60:
+        visual_rhythm_hint = 'extended_story'
+    elif duration <= 30 and len(frames) >= 3:
+        visual_rhythm_hint = 'short_dynamic'
+    else:
+        visual_rhythm_hint = 'mixed'
+    video_fingerprint = {
+        'durationBucket': _duration_bucket(duration),
+        'orientation': orientation,
+        'resolutionClass': _resolution_class(width, height),
+        'hasAudio': has_audio,
+        'frameCount': len(frames),
+        'frameTimes': [frame.get('approxTimeSec', 0) for frame in frames],
+        'filenameTokens': (user_context.get('extractedFilenameHints', {}) or {}).get('tokens', []),
+        'detectedModel': (user_context.get('extractedFilenameHints', {}) or {}).get('detectedModel', ''),
+        'contentHints': content_hints,
+        'visualRhythmHint': visual_rhythm_hint,
+        'platformPrimaryHint': platform_primary_hint
+    }
 
     return {
         'summary': summary,
-        'technical': {
-            'durationSec': duration,
-            'resolution': f'{width}x{height}' if width and height else None,
-            'fps': fps,
-            'aspectRatio': aspect_ratio,
-            'hasAudio': has_audio,
-            'bitrate': bitrate
-        },
+        'technical': technical_summary,
         'platformFit': {
             'youtubeShorts': {'score': shorts_score, 'notes': 'Оценка пригодности для YouTube Shorts.'},
             'youtubeVideo': {'score': youtube_score, 'notes': 'Оценка пригодности для классического YouTube-видео.'},
@@ -155,14 +185,7 @@ def build_analysis_report(duration, width, height, fps, has_audio, bitrate, fram
         'detectedIssues': detected_issues,
         'recommendations': recommendations,
         'ai_input': {
-            'technicalSummary': {
-                'durationSec': duration,
-                'resolution': f'{width}x{height}' if width and height else None,
-                'fps': fps,
-                'aspectRatio': aspect_ratio,
-                'hasAudio': has_audio,
-                'bitrate': bitrate
-            },
+            'technicalSummary': technical_summary,
             'frameSummary': {
                 'totalFrames': len(frames),
                 'frames': [
@@ -174,6 +197,9 @@ def build_analysis_report(duration, width, height, fps, has_audio, bitrate, fram
                     for frame in frames
                 ]
             },
+            'frameManifest': {'totalFrames': len(frames), 'frames': frames},
+            'videoFingerprint': video_fingerprint,
+            'contentHints': content_hints,
             'platformFit': {
                 'youtubeShorts': shorts_score,
                 'youtubeVideo': youtube_score,
@@ -215,6 +241,60 @@ def _extract_filename_hints(original_filename: str) -> dict:
                 model = f'BMW {candidate.upper()}'
                 break
     return {'tokens': tokens[:12], 'detectedModel': model}
+
+
+def _duration_bucket(duration: float) -> str:
+    if duration < 10:
+        return 'ultra_short'
+    if duration <= 30:
+        return 'short'
+    if duration <= 180:
+        return 'medium'
+    return 'long'
+
+
+def _orientation(width: int, height: int) -> str:
+    if not width or not height:
+        return 'unknown'
+    if height > width:
+        return 'vertical'
+    if width > height:
+        return 'horizontal'
+    return 'square'
+
+
+def _resolution_class(width: int, height: int) -> str:
+    short_side = min(width, height) if width and height else 0
+    long_side = max(width, height) if width and height else 0
+    if short_side < 720:
+        return 'low'
+    if short_side < 1080:
+        return 'hd'
+    if long_side >= 3840 or short_side >= 2160:
+        return 'ultra_hd'
+    return 'full_hd'
+
+
+def _build_content_hints(user_context: dict, technical_summary: dict) -> list[str]:
+    source_chunks = [
+        user_context.get('originalFilename', ''),
+        ' '.join(user_context.get('keywords', []) if isinstance(user_context.get('keywords', []), list) else []),
+        ' '.join((user_context.get('extractedFilenameHints', {}) or {}).get('tokens', [])),
+        json.dumps(technical_summary, ensure_ascii=False),
+    ]
+    text = ' '.join(source_chunks).lower()
+    hint_rules = {
+        'auto_model': ['bmw', 'x3', 'x5'],
+        'drift': ['drift', 'дрифт'],
+        'phonk_music': ['phonk', 'фонк'],
+        'cinematic_style': ['cinematic', 'синематик'],
+        'night_scene': ['night', 'ноч', 'lights'],
+        'city_scene': ['city', 'город', 'urban'],
+        'interior': ['interior', 'салон'],
+        'review': ['review', 'обзор'],
+        'sale_video': ['sale', 'продажа', 'for sale'],
+    }
+    return [hint for hint, terms in hint_rules.items() if any(term in text for term in terms)]
 
 
 def get_job_context(job_id: str):

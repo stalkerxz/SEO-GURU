@@ -174,6 +174,11 @@ export default function Home() {
       : fallbackContext?.keywords || []
   };
   const technical = report?.technical || {};
+  const videoFingerprint = aiInput?.videoFingerprint || {};
+  const contentHints = Array.isArray(aiInput?.contentHints) ? aiInput.contentHints : [];
+  const keywordSet = new Set((contextSource.keywords || []).map((k: string) => String(k).toLowerCase()));
+  const onlyKeywordHints = contentHints.length > 0 && contentHints.every((hint: string) => keywordSet.has(hint.toLowerCase()));
+  const weakVideoHints = contentHints.length === 0 || onlyKeywordHints;
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
@@ -259,6 +264,7 @@ export default function Home() {
             <article className={cardClass}><h2 className="text-lg font-semibold">Контекст анализа</h2><div className="mt-3 grid gap-2 text-sm sm:grid-cols-2"><MetricCard label="Цель" value={contextSource.userGoal || 'Не указано'} /><MetricCard label="Ниша" value={contextSource.niche || 'Не указано'} /><MetricCard label="Язык" value={contextSource.language || 'Не указано'} /><MetricCard label="Гео" value={contextSource.geo || 'Не указано'} /><MetricCard label="Бренд" value={contextSource.brandName || 'Не указано'} /><MetricCard label="Ключевые слова" value={(contextSource.keywords || []).join(', ') || 'Не указано'} /></div></article>
 
             <article className={cardClass}><h2 className="text-lg font-semibold">Технические параметры</h2><div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><MetricCard label="Длительность" value={technical.durationSec ? `${technical.durationSec} сек` : '—'} /><MetricCard label="Разрешение" value={technical.resolution || '—'} /><MetricCard label="FPS" value={technical.fps ? String(technical.fps) : '—'} /><MetricCard label="Соотношение сторон" value={technical.aspectRatio || '—'} /><MetricCard label="Аудио" value={technical.hasAudio ? 'Да' : 'Нет'} /><MetricCard label="Битрейт" value={technical.bitrate || '—'} /></div></article>
+            <article className={cardClass}><h2 className="text-lg font-semibold">Видео-подсказки</h2><div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><MetricCard label="Orientation" value={videoFingerprint.orientation || '—'} /><MetricCard label="Duration bucket" value={videoFingerprint.durationBucket || '—'} /><MetricCard label="Resolution class" value={videoFingerprint.resolutionClass || '—'} /><MetricCard label="Detected model" value={videoFingerprint.detectedModel || '—'} /><MetricCard label="Primary platform hint" value={videoFingerprint.platformPrimaryHint || '—'} /><MetricCard label="Content hints" value={contentHints.join(', ') || '—'} /></div>{weakVideoHints && <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Пока сервис использует технический анализ, имя файла и введённый контекст. Визуальное распознавание объектов будет добавлено позже.</p>}</article>
 
             <article className={cardClass}><h2 className="text-lg font-semibold">Кадры из видео</h2>{frames.length === 0 ? <p className="mt-2 text-sm text-slate-500">Кадры пока не готовы.</p> : <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{frames.map((f: any) => <div key={f.storageKey} className="overflow-hidden rounded-xl border border-slate-200 bg-white"><img src={`${API_URL}${f.previewUrl}`} alt={`Кадр ${f.filename}`} className="h-28 w-full object-cover" /><div className="p-2"><p className="truncate text-xs text-slate-500">{f.filename}</p><span className="mt-1 inline-block rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700">~{f.approxTimeSec} сек</span></div></div>)}</div>}</article>
 
