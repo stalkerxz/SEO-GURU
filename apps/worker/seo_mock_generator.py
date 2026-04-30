@@ -6,7 +6,8 @@ FORBIDDEN_TERMS = {
     'video_yt_full_HD', 'shorts_reels_tiktok', 'needs_adaptation', 'horizontal_youtube_story',
     'vertical_short_clip', 'square_low_quality_social_clip', 'ultra_hd_short', 'general_video',
     'views_and_reach', 'full_hd', 'ultra_hd', 'technical_fingerprint', 'filename_hints',
-    'user_keywords', 'mixed_context'
+    'user_keywords', 'mixed_context', 'auto_drift_phonk', 'auto_cinematic', 'auto_detail_showcase',
+    'generic_video', 'generic_horizontal_video'
 }
 
 
@@ -95,6 +96,10 @@ def detect_subject(meta: Dict[str, Any]) -> str:
     return 'ролик'
 
 
+def is_auto_angle(angle: str) -> bool:
+    return angle in {'auto_drift_phonk', 'auto_cinematic', 'auto_review', 'auto_sale', 'auto_detail_showcase'}
+
+
 def _common_tips(base: List[str], meta: Dict[str, Any]) -> List[str]:
     tips = list(base)
     if meta['goal'] == 'leads':
@@ -157,24 +162,208 @@ def _generation_basis(meta: Dict[str, Any], angle: str) -> List[str]:
 def _assert_readable(pack: Dict[str, Any]) -> None:
     blob = ' '.join([
         pack.get('bestTitle', ''), pack.get('description', ''), pack.get('coverText', ''), pack.get('pinnedComment', ''),
-        ' '.join(pack.get('titleOptions', [])), ' '.join(pack.get('hashtags', []))
+        pack.get('hookText', ''), pack.get('firstLineHook', ''), pack.get('trendAngle', ''), pack.get('caption', ''),
+        pack.get('storyAnnouncement', ''), pack.get('cta', ''), pack.get('altText', ''), pack.get('thumbnailText', ''),
+        ' '.join(pack.get('titleOptions', [])), ' '.join(pack.get('hashtags', [])), ' '.join(pack.get('tags', []))
     ]).lower()
     for term in FORBIDDEN_TERMS:
         if term.lower() in blob:
             raise ValueError(f'Forbidden technical term leaked into SEO copy: {term}')
 
 
-def _platformize(pack: Dict[str, Any], platform: str, subject: str) -> Dict[str, Any]:
-    result = dict(pack)
-    if platform == 'youtubeVideo':
-        result['description'] = f"{result['description']}\n\nСтруктура для YouTube: хук в начале, развитие сюжета и финальный CTA."
-    elif platform == 'youtubeShorts':
-        result['bestTitle'] = result.get('titleOptions', [result['bestTitle']])[0]
-    elif platform == 'instagramReels':
-        result['description'] = f"{result['description']} Сохраняйте идею для следующего монтажа с {subject}."
-    elif platform == 'tiktok':
-        result['description'] = f"{result['description']} Коротко, резко, в трендовом ритме."
-    return result
+def build_youtube_video_package(meta: Dict[str, Any], angle: str, subject: str, tips: List[str]) -> Dict[str, Any]:
+    if angle == 'horizontal_youtube_story':
+        return {
+            'bestTitle': 'Горизонтальный ролик для YouTube: сильный формат',
+            'titleOptions': [
+                'Горизонтальный ролик для YouTube: сильный формат',
+                'Full HD история для YouTube Video',
+                f'{subject}: полноценный YouTube-формат',
+                'Как раскрыть ролик в длинном формате YouTube',
+                'YouTube Video версия: структура, ритм, результат'
+            ],
+            'description': 'Это основной горизонтальный формат для YouTube Video в Full HD.\n\n'
+                           'В ролике есть пространство для истории: вступление, развитие и финальный акцент, поэтому зритель дольше удерживается.\n\n'
+                           'Сделайте описание структурным: что в видео, почему это важно, и кого заинтересует.\n\n'
+                           'Добавьте CTA в конце: подписка, комментарий и переход к следующему ролику.',
+            'tags': ['YouTube Video', 'Full HD', 'горизонтальный ролик', 'видеомонтаж', 'контент для YouTube', 'story edit', 'cinematic', 'brand content', 'video production', 'SMM видео'],
+            'thumbnailText': 'YOUTUBE FORMAT',
+            'pinnedComment': 'Сделать из этого ролика отдельный вертикальный cut для Shorts?',
+            'improvementTips': tips + ['Добавьте обложку 16:9 с крупным объектом и коротким текстом.', 'Добавьте структуру в описание: хук, суть, CTA.', 'Соберите отдельную Shorts-версию из самого сильного момента.']
+        }
+    if not is_auto_angle(angle):
+        return {
+            'bestTitle': f'{subject}: полноценная версия для YouTube',
+            'titleOptions': [f'{subject}: полноценная версия для YouTube', f'{subject}: полный сюжет в YouTube Video', 'YouTube Video: структурная подача ролика', 'Полная версия ролика для YouTube', 'Развёрнутый формат для YouTube Video'],
+            'description': f'Полная версия ролика про {subject} для YouTube Video.\n\n'
+                           'В длинном формате проще раскрыть идею через структуру: вступление, основная часть, финальный вывод.\n\n'
+                           'Добавьте в описание полезный контекст, чтобы зрителю было понятно, зачем смотреть до конца.\n\n'
+                           'В конце добавьте CTA: подписка, комментарий и переход к следующему видео.',
+            'tags': [subject, 'YouTube Video', 'full version', 'video content', 'видеомонтаж', 'контент', 'story format', 'brand video', 'long-form', 'SMM'],
+            'thumbnailText': 'YOUTUBE STORY',
+            'pinnedComment': 'Какой фрагмент раскрыть подробнее в следующем ролике?',
+            'improvementTips': tips + ['Добавьте обложку 16:9 с понятным акцентом.', 'Сделайте описание структурным: суть, ценность, CTA.', 'Подготовьте отдельную вертикальную версию для Shorts.']
+        }
+    return {
+        'bestTitle': f'{subject} в drift/cinematic формате — сильный авто-ролик',
+        'titleOptions': [
+            f'{subject} Drift & Cinematic: полный авто-ролик',
+            f'{subject}: дым, ритм и cinematic монтаж',
+            f'Авто-ролик про {subject} — динамика и атмосфера',
+            f'{subject}: как выглядит drift edit в длинном формате',
+            f'{subject} — уличный стиль, скорость и визуальный ритм'
+        ],
+        'description': f'В этом видео {subject} показан через сочетание drift-динамики и cinematic подачи.\n\n'
+                       'Почему стоит смотреть: насыщенный темп, выразительный звук и монтаж, который держит внимание до финала.\n\n'
+                       f'Если вам близка тема авто-контента, дрифта и брендовой визуальной стилистики, это видео точно зайдёт. {meta.get("geo", "")}'.strip()
+                       + '\n\nОцените монтаж в комментариях и подпишитесь, чтобы не пропустить следующую серию.',
+        'tags': [subject, 'drift', 'cinematic car edit', 'car video', 'автосъемка', 'car montage', 'street drift', 'phonk drift', 'auto content', 'BMW', 'Tyumen', 'PROTOPOPOV PRODUCTION'],
+        'thumbnailText': 'BMW X3 DRIFT' if 'x3' in subject.lower() else 'DRIFT CINEMATIC',
+        'pinnedComment': 'Какой момент оставить главным в следующем видео: больше дыма или больше cinematic?',
+        'improvementTips': tips + ['Добавьте обложку 16:9 с контрастным текстом.', 'Сделайте описание из 2–4 абзацев с логичной структурой.', 'Подготовьте отдельную версию для Shorts с другим темпом.']
+    }
+
+
+def build_youtube_shorts_package(meta: Dict[str, Any], angle: str, subject: str, tips: List[str]) -> Dict[str, Any]:
+    if angle == 'horizontal_youtube_story':
+        return {
+            'bestTitle': 'Сильный момент из YouTube-ролика',
+            'titleOptions': ['Сильный момент из YouTube-ролика', 'Горизонтальный ролик — короткая версия', 'YouTube cut для Shorts'],
+            'description': 'Из горизонтального ролика лучше собрать отдельный вертикальный cut на 10–20 секунд.',
+            'hashtags': ['#Shorts', '#YouTube', '#Видео', '#Монтаж', '#Контент'],
+            'coverText': 'SHORT CUT',
+            'pinnedComment': 'Какой момент вынести в Shorts?',
+            'hookText': 'Самый сильный момент — в короткую версию',
+            'improvementTips': tips + ['Первые 0.5 сек должны сразу цеплять.', 'Текст на экране лучше сделать крупнее.', 'Не перегружайте описание — 1–2 строки достаточно.']
+        }
+    if angle == 'square_low_quality_social_clip':
+        return {
+            'bestTitle': 'Короткая версия после адаптации',
+            'titleOptions': ['Короткая версия после адаптации', 'Сначала re-export, потом публикация', 'Shorts после 9:16 cut'],
+            'description': 'Квадратный исходник низкого качества. Сначала сделайте re-export в 9:16 Full HD, потом публикуйте.',
+            'hashtags': ['#Shorts', '#Видео', '#Монтаж', '#Адаптация', '#Контент'],
+            'coverText': 'RE-EXPORT 9:16',
+            'pinnedComment': 'Собрать финальную версию после адаптации?',
+            'hookText': 'Сначала адаптация, потом публикация',
+            'improvementTips': tips + ['Сначала рефрейм 9:16.', 'Переэкспортируйте минимум в Full HD.', 'Проверьте читаемость текста на экране.']
+        }
+    if is_auto_angle(angle):
+        return {
+            'bestTitle': f'{subject} Drift Mode 🔥' if 'bmw' in subject.lower() else f'{subject} в режиме максимального вайба 🔥',
+            'titleOptions': [f'{subject} Drift Mode 🔥', f'{subject} за 15 секунд', 'Drift. Smoke. Repeat.', 'Phonk + speed = wow', 'Cinematic punch cut'],
+            'description': f'{subject} в коротком динамичном фрагменте. Хук с первых кадров и акцент на ритм.',
+            'hashtags': ['#Shorts', '#BMW', '#BMWX3', '#Drift', '#Phonk', '#CarEdit'],
+            'coverText': 'BMW X3\nDRIFT MODE' if 'x3' in subject.lower() else 'DRIFT\nMODE',
+            'pinnedComment': 'Больше дыма или больше cinematic?',
+            'hookText': f'{subject} в drift mode за 15 секунд',
+            'improvementTips': tips + ['Первые 0.5 сек должны сразу цеплять.', 'Текст на экране лучше сделать крупнее.', 'Не перегружайте описание — 1–2 строки достаточно.']
+        }
+    return {
+        'bestTitle': f'{subject}: короткая вертикальная версия',
+        'titleOptions': [f'{subject}: короткая вертикальная версия', f'{subject} за 15 секунд', 'Короткий ролик для Shorts', 'Быстрый cut для ленты', 'Short-form версия'],
+        'description': f'{subject} в коротком формате: быстрый вход, понятный акцент и динамичный темп.',
+        'hashtags': ['#Shorts', '#Видео', '#Контент', '#Монтаж', '#ShortVideo'],
+        'coverText': 'SHORT VERSION',
+        'pinnedComment': 'Какой момент сделать главным в следующем коротком ролике?',
+        'hookText': 'Сильный момент — с первых кадров',
+        'improvementTips': tips + ['Первые 0.5 сек должны сразу цеплять.', 'Текст на экране лучше сделать крупнее.', 'Не перегружайте описание — 1–2 строки достаточно.']
+    }
+
+
+def build_instagram_reels_package(meta: Dict[str, Any], angle: str, subject: str, tips: List[str]) -> Dict[str, Any]:
+    if angle == 'horizontal_youtube_story':
+        return {
+            'caption': 'Горизонтальный исходник лучше превратить в вертикальный Reels: взять самый сильный момент и добавить крупный текст.',
+            'firstLineHook': 'Из YouTube-ролика — в Reels',
+            'hashtags': ['#reels', '#монтаж', '#контент', '#smm', '#videoedit'],
+            'altText': 'Фрагмент горизонтального видео, адаптируемый под вертикальный Reels.',
+            'coverText': 'REELS CUT',
+            'pinnedComment': 'Какой момент оставить первым кадром?',
+            'storyAnnouncement': 'Готовим короткую Reels-версию из большого ролика.',
+            'cta': 'Сохрани как идею для адаптации горизонтального видео.',
+            'improvementTips': tips + ['Сделайте обложку с крупным акцентом.', 'Первая строка caption должна быть хук-фразой.', 'Лучше использовать 5–7 hashtag, а не 20.']
+        }
+    if angle == 'square_low_quality_social_clip':
+        return {
+            'caption': 'Квадратный черновик с низким качеством. Перед публикацией лучше сделать re-export в 9:16 Full HD.',
+            'firstLineHook': 'Сначала адаптация, потом Reels',
+            'hashtags': ['#reels', '#монтаж', '#контент', '#videoedit', '#smm'],
+            'altText': 'Квадратный ролик низкого качества, который нужно адаптировать под вертикальный Reels.',
+            'coverText': 'RE-EXPORT 9:16',
+            'pinnedComment': 'Делаем финальный Reels после переэкспорта?',
+            'storyAnnouncement': 'Пересобираем видео в вертикальный формат для Reels.',
+            'cta': 'Сохрани, чтобы не забыть этап адаптации.',
+            'improvementTips': tips + ['Сначала рефрейм 9:16.', 'Переэкспортируйте в Full HD.', 'Проверьте читаемость обложки и текста.']
+        }
+    if is_auto_angle(angle):
+        return {
+            'caption': f'{subject}, немного дыма и cinematic-настроение. Какой кадр сильнее — первый или финальный?',
+            'firstLineHook': f'{subject} в cinematic drift mood',
+            'hashtags': ['#bmw', '#bmwx3', '#drift', '#автосъемка', '#reels', '#cargram'],
+            'altText': f'Короткий авто-ролик с {subject}: динамичные проезды, дым и cinematic переходы.',
+            'coverText': 'BMW X3 / CINEMATIC' if 'x3' in subject.lower() else 'CINEMATIC / DRIFT',
+            'pinnedComment': 'Оставить больше дрифта или сделать чистый cinematic?',
+            'storyAnnouncement': 'Новый авто-ролик уже в Reels. Залетайте оценить монтаж.',
+            'cta': 'Сохрани, если нравится такой стиль авто-контента.',
+            'improvementTips': tips + ['Сделайте обложку с крупной моделью авто.', 'Первая строка caption должна быть хук-фразой.', 'Лучше использовать 5–7 hashtag, а не 20.']
+        }
+    return {
+        'caption': f'{subject}: короткий Reels-фрагмент с акцентом на темп и настроение. Какой кадр лучше оставить первым?',
+        'firstLineHook': f'{subject}: динамичный Reels cut',
+        'hashtags': ['#reels', '#контент', '#монтаж', '#videoedit', '#smm'],
+        'altText': f'Короткий ролик для Reels про {subject} с динамичным монтажом.',
+        'coverText': 'REELS FORMAT',
+        'pinnedComment': 'Какой вариант монтажа оставить в финале?',
+        'storyAnnouncement': 'Новый ролик в Reels — заходите оценить подачу.',
+        'cta': 'Сохрани, если откликается такой стиль.',
+        'improvementTips': tips + ['Сделайте обложку с крупным визуальным акцентом.', 'Первая строка caption должна быть хук-фразой.', 'Лучше использовать 5–7 hashtag, а не 20.']
+    }
+
+
+def build_tiktok_package(meta: Dict[str, Any], angle: str, subject: str, tips: List[str]) -> Dict[str, Any]:
+    if angle == 'horizontal_youtube_story':
+        return {
+            'caption': 'Из длинного ролика — короткий TikTok. Что оставить первым кадром?',
+            'hookText': 'Самый сильный момент — в первые 1 сек',
+            'hashtags': ['#tiktok', '#монтаж', '#videoedit', '#контент'],
+            'coverText': 'FAST CUT',
+            'pinnedComment': 'Оставить этот момент или выбрать другой?',
+            'cta': 'Пиши, какой фрагмент сильнее.',
+            'trendAngle': 'fast cut from long-form video',
+            'improvementTips': tips + ['Резкий хук должен быть до 1 секунды.', 'Меньше текста, больше ритма.', 'Используйте звук и бит как основу монтажа.']
+        }
+    if angle == 'square_low_quality_social_clip':
+        return {
+            'caption': 'Квадратный черновик — сначала re-export в 9:16 Full HD, потом публикация в TikTok.',
+            'hookText': 'Сначала адаптация формата',
+            'hashtags': ['#tiktok', '#videoedit', '#контент', '#монтаж'],
+            'coverText': 'RE-EXPORT',
+            'pinnedComment': 'Публиковать после адаптации?',
+            'cta': 'Пиши, делать ли финальный 9:16 cut.',
+            'trendAngle': 're-export and vertical reframing workflow',
+            'improvementTips': tips + ['Резкий хук должен быть до 1 секунды.', 'Меньше текста, больше ритма.', 'Используйте звук и бит как основу монтажа.']
+        }
+    if is_auto_angle(angle):
+        return {
+            'caption': f'{subject} + drift mood. Залетит?',
+            'hookText': f'{subject} ушёл в drift mode',
+            'hashtags': ['#bmw', '#drift', '#phonk', '#caredit', '#cartok'],
+            'coverText': 'DRIFT MODE',
+            'pinnedComment': 'Part 2 ночью?',
+            'cta': 'Пиши, какой авто сделать следующим.',
+            'trendAngle': 'phonk drift edit / cinematic car transition',
+            'improvementTips': tips + ['Резкий хук должен быть до 1 секунды.', 'Меньше текста, больше ритма.', 'Используйте звук и бит как основу монтажа.']
+        }
+    return {
+        'caption': f'{subject}: короткий TikTok-фрагмент. Оставляем этот ритм?',
+        'hookText': 'Сильный кадр — с первой секунды',
+        'hashtags': ['#tiktok', '#videoedit', '#content', '#монтаж'],
+        'coverText': 'QUICK CUT',
+        'pinnedComment': 'Оставить этот вариант или сделать быстрее?',
+        'cta': 'Пиши, какой формат зайдёт лучше.',
+        'trendAngle': 'quick short-form cut',
+        'improvementTips': tips + ['Резкий хук должен быть до 1 секунды.', 'Меньше текста, больше ритма.', 'Используйте звук и бит как основу монтажа.']
+    }
 
 
 def generate_mock_seo_package(analysis_report: Dict[str, Any], platform: str) -> Dict[str, Any]:
@@ -188,67 +377,15 @@ def generate_mock_seo_package(analysis_report: Dict[str, Any], platform: str) ->
     angle = ai_input.get('videoAngle') or build_video_angle(meta)
     generation_basis = ai_input.get('generationBasis') or _generation_basis(meta, angle)
 
-    if angle == 'auto_drift_phonk':
-        pack = {
-            'bestTitle': f'{subject} Drift Mode под phonk',
-            'titleOptions': [
-                f'{subject} Drift Mode под phonk',
-                f'{subject}: дым, скорость и cinematic',
-                f'Drift edit: {subject} в кадре'
-            ],
-            'description': f'Короткий вертикальный ролик с {subject} в drift/cinematic стиле. Подходит для Shorts, Reels и TikTok: быстрый хук, динамика и понятный визуальный образ.',
-            'hashtags': ['#Shorts', '#BMW', '#BMWX3', '#Drift', '#Phonk', '#АвтоСъемка', '#CarEdit', '#Cinematic'],
-            'coverText': 'BMW X3 DRIFT MODE' if 'x3' in subject.lower() else 'DRIFT MODE',
-            'pinnedComment': 'Больше cinematic или больше дрифта?',
-            'improvementTips': _common_tips(['Добавьте плотный хук в первые 1–2 секунды и держите ритм под музыку.'], meta)
-        }
-    elif angle == 'auto_cinematic':
-        pack = {
-            'bestTitle': f'{subject}: cinematic атмосфера в движении',
-            'titleOptions': [f'{subject}: cinematic атмосфера в движении', f'{subject} в свете города', 'Атмосферный авто-ролик в стиле cinematic'],
-            'description': f'Атмосферный ролик про {subject}: свет, движение и стильный монтаж. Подходит для публикации на Shorts, Reels и TikTok.',
-            'hashtags': ['#BMW', '#Cinematic', '#CarEdit', '#АвтоСъемка', '#Shorts'],
-            'coverText': 'CINEMATIC DRIVE',
-            'pinnedComment': 'Оставить плавный вайб или ускорить монтаж?',
-            'improvementTips': _common_tips(['Усильте световые акценты и плавные переходы в середине ролика.'], meta)
-        }
-    elif angle == 'horizontal_youtube_story':
-        pack = {
-            'bestTitle': 'Горизонтальный ролик для YouTube: сильный формат',
-            'titleOptions': ['Горизонтальный ролик для YouTube: сильный формат', 'Сильная YouTube-версия в Full HD', 'Формат для YouTube Video без потери качества'],
-            'description': 'Видео снято в горизонтальном Full HD формате, поэтому лучше подходит для YouTube Video. Для Shorts/Reels/TikTok стоит сделать отдельную вертикальную версию.',
-            'hashtags': ['#YouTube', '#Видео', '#Контент', '#Монтаж', '#SMM'],
-            'coverText': 'YOUTUBE FORMAT',
-            'pinnedComment': 'Сделать отдельную короткую версию под Shorts?',
-            'improvementTips': _common_tips(['Оставьте эту версию как основную для YouTube, а короткую соберите отдельно в 9:16.'], meta)
-        }
-    elif angle == 'square_low_quality_social_clip':
-        pack = {
-            'bestTitle': 'Квадратный клип: нужна адаптация под Reels и Shorts',
-            'titleOptions': ['Квадратный клип: нужна адаптация под Reels и Shorts', 'Черновой клип: пересоберите под 9:16', 'Квадратный формат: как подготовить к публикации'],
-            'description': 'Ролик в квадратном формате и низком разрешении лучше использовать как черновик. Для публикации стоит пересобрать его в 9:16 и экспортировать минимум в Full HD.',
-            'hashtags': ['#Reels', '#Shorts', '#ВидеоМонтаж', '#Контент', '#SMM'],
-            'coverText': 'АДАПТАЦИЯ ФОРМАТА',
-            'pinnedComment': 'Собрать финальную вертикальную версию?',
-            'improvementTips': _common_tips(['Сначала делайте рефрейм 9:16, затем переэкспорт в Full HD.'], meta)
-        }
+    base_tips = _common_tips(['Проверьте первые секунды: они должны сразу цеплять внимание.'], meta)
+    if platform == 'youtubeVideo':
+        pack = build_youtube_video_package(meta, angle, subject, base_tips)
+    elif platform == 'youtubeShorts':
+        pack = build_youtube_shorts_package(meta, angle, subject, base_tips)
+    elif platform == 'instagramReels':
+        pack = build_instagram_reels_package(meta, angle, subject, base_tips)
     else:
-        best_title = f'Вертикальный ролик для Shorts, Reels и TikTok' if angle == 'vertical_short_clip' and subject == 'ролик' else f'{subject}: вертикальный ролик для Shorts, Reels и TikTok'
-        pack = {
-            'bestTitle': best_title,
-            'titleOptions': [best_title, f'{subject}: короткий динамичный формат', 'Короткое видео под соцсети'],
-            'description': (
-                f'Готовый к публикации ролик в формате {readable_angle(angle)}. '
-                f'Цель — {readable_goal(meta.get("goal"))}, ниша — {readable_niche(meta.get("niche"))}. '
-                f'Текущее качество: {readable_resolution_class(vf.get("resolutionClass"))}, рекомендация платформы: {readable_platform_hint(vf.get("platformPrimaryHint"))}.'
-            ),
-            'hashtags': ['#Shorts', '#Reels', '#TikTok', '#Контент', '#Видео'],
-            'coverText': 'SHORT FORMAT',
-            'pinnedComment': 'Нужна версия с другим темпом монтажа?',
-            'improvementTips': _common_tips(['Проверьте первые секунды: они должны сразу цеплять внимание.'], meta)
-        }
-
-    pack = _platformize(pack, platform, subject)
+        pack = build_tiktok_package(meta, angle, subject, base_tips)
     _assert_readable(pack)
     pack['videoAngle'] = angle
     pack['generationBasis'] = generation_basis
