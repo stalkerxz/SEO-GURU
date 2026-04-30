@@ -28,19 +28,22 @@ const CopyRow = ({ label, value }: { label: string; value: any }) => (
   </div>
 );
 
-const AnalysisContextBlock = ({ aiInput }: { aiInput: any }) => (
+const AnalysisContextBlock = ({ aiInput, fallbackContext }: { aiInput: any; fallbackContext: any }) => {
+  const source = Object.keys(aiInput || {}).length > 0 ? aiInput : (fallbackContext || {});
+  return (
   <section>
     <h2 className="text-lg font-semibold">Контекст анализа</h2>
     <ul className="list-disc ml-5">
-      <li>Цель: {aiInput?.userGoal || '—'}</li>
-      <li>Ниша: {aiInput?.niche || '—'}</li>
-      <li>Язык: {aiInput?.language || '—'}</li>
-      <li>Гео: {aiInput?.geo || '—'}</li>
-      <li>Бренд: {aiInput?.brandName || '—'}</li>
-      <li>Ключевые слова: {(aiInput?.keywords || []).join(', ') || '—'}</li>
+      <li>Цель: {source?.userGoal || '—'}</li>
+      <li>Ниша: {source?.niche || '—'}</li>
+      <li>Язык: {source?.language || '—'}</li>
+      <li>Гео: {source?.geo || '—'}</li>
+      <li>Бренд: {source?.brandName || '—'}</li>
+      <li>Ключевые слова: {(source?.keywords || []).join(', ') || '—'}</li>
     </ul>
   </section>
-);
+  );
+};
 
 const TechnicalBlock = ({ technical }: { technical: any }) => technical && (
   <section>
@@ -178,6 +181,7 @@ export default function Home() {
   const aiFallbackUsed = Boolean(report?.aiFallbackUsed);
   const aiWarnings = report?.aiWarnings || [];
   const aiInput = report?.ai_input || {};
+  const jobContext = job?.user_context || {};
 
   return (
     <main className="max-w-5xl mx-auto p-6 space-y-4">
@@ -207,7 +211,7 @@ export default function Home() {
       {job && (
         <div className="bg-white rounded p-4 shadow space-y-6">
           <section><h2 className="text-lg font-semibold">Статус задачи</h2><p><b>{statusText}</b></p></section>
-          <AnalysisContextBlock aiInput={aiInput} />
+          <AnalysisContextBlock aiInput={aiInput} fallbackContext={jobContext} />
           <TechnicalBlock technical={technical} />
           <FramesBlock frames={frames} />
           <PlatformFitBlock platformFit={platformFit} />

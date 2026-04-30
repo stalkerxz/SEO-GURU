@@ -20,7 +20,24 @@ def _contextual_meta(ai_input: Dict[str, Any]) -> Dict[str, Any]:
         'geo': ai_input.get('geo', ''),
         'brand': ai_input.get('brandName', ''),
         'keywords': ai_input.get('keywords', []),
+        'platform_fit': ai_input.get('platformFit', {}),
+        'technical': ai_input.get('technicalSummary', {}),
+        'geo': ai_input.get('geo', ''),
+        'filename_hints': ai_input.get('extractedFilenameHints', {}),
     }
+
+
+def _detect_auto_subject(meta: Dict[str, Any]) -> str:
+    keywords = [str(x).strip() for x in (meta.get('keywords') or []) if str(x).strip()]
+    full = ' '.join(keywords).lower()
+    for model in ['bmw x5', 'bmw x3']:
+        if model in full:
+            return model.upper().replace('X', 'X')
+    hints = meta.get('filename_hints', {}) or {}
+    detected = hints.get('detectedModel')
+    if isinstance(detected, str) and detected.strip():
+        return detected.strip()
+    return 'BMW'
 
 
 def _common_tips(base: List[str], meta: Dict[str, Any]) -> List[str]:
@@ -57,6 +74,58 @@ def generate_mock_seo_package(analysis_report: Dict[str, Any], platform: str) ->
     kw = ', '.join(meta['keywords'][:3]) if isinstance(meta['keywords'], list) and meta['keywords'] else 'видео'
     brand = f" · {meta['brand']}" if meta['brand'] else ''
     geo = f" в {meta['geo']}" if meta['geo'] else ''
+
+    if meta['niche'] == 'auto':
+        subject = _detect_auto_subject(meta)
+        geo_tag = f" ({meta['geo']})" if meta['geo'] else ''
+        brand_line = f" от {meta['brand']}" if meta['brand'] else ''
+        short_video_hint = float(meta.get('technical', {}).get('durationSec') or 0) <= 60
+        auto_hash_ru = ['#АвтоВидео', '#АвтоСъемка']
+        if platform == 'youtubeShorts':
+            titles = [
+                f'{subject} Drift Mode | Авто Shorts',
+                f'{subject} в cinematic стиле',
+                f'Drift edit под phonk | {subject}',
+                f'{subject} — стиль и дым',
+                f'{subject} за 15 секунд'
+            ]
+            return {
+                'titleOptions': titles,
+                'bestTitle': titles[0],
+                'description': f'Короткий авто-ролик{geo_tag}{brand_line}. Снято в стиле cinematic/drift с упором на удержание первых секунд.',
+                'hashtags': ['#Shorts', '#BMW', f"#{subject.replace(' ', '')}", '#Drift', *auto_hash_ru][:6],
+                'coverText': f'{subject} / DRIFT MODE',
+                'pinnedComment': 'Какой стиль заходит больше — cinematic или drift edit?',
+                'improvementTips': tips
+            }
+        if platform == 'instagramReels':
+            return {
+                'caption': f'{subject} в деле{geo_tag}. Быстрый cinematic car edit, как вам вайб?{brand_line}',
+                'hashtags': ['#bmw', f"#{subject.replace(' ', '').lower()}", '#drift', '#автосъемка', f"#{meta['geo'].lower()}" if meta['geo'] else '#reels', '#reels'][:6],
+                'coverText': f'{subject} • CINEMATIC',
+                'pinnedComment': 'Оставить больше дрифта или добавить спокойных проездов?',
+                'improvementTips': tips
+            }
+        if platform == 'tiktok':
+            return {
+                'caption': f'{subject} + drift mode? Проверим залетит ли 🔥',
+                'hookText': f'{subject} + drift mode?',
+                'trendAngle': 'phonk / drift / cinematic car edit',
+                'hashtags': ['#bmw', '#drift', '#caredit', '#tiktokauto', '#phonk', '#автосъемка'],
+                'pinnedComment': 'Сделать part 2 с ночной съёмкой?',
+                'improvementTips': tips
+            }
+        if platform == 'youtubeVideo':
+            long_form_hint = 'Основной формат лучше публиковать как Shorts.' if short_video_hint else 'Можно выпускать как обычное YouTube видео.'
+            geo_label = meta['geo'] or 'по проекту'
+            return {
+                'titleOptions': [f'{subject}: cinematic drift edit', f'{subject} — авто монтаж и разбор'],
+                'bestTitle': f'{subject} cinematic drift edit | авто-разбор',
+                'description': f'{long_form_hint} В описании добавьте гео {geo_label} и бренд{brand_line or ""}.',
+                'hashtags': ['#BMW', '#CarEdit', '#Drift', '#YouTubeVideo', '#АвтоВидео', '#Cinematic'],
+                'pinnedComment': 'Если нужен long-version breakdown — написать отдельный разбор?',
+                'improvementTips': tips
+            }
 
     return {
         'titleOptions': [f'{niche_prefix}-разбор: как усилить ролик{geo}', f'{niche_prefix}: быстрые улучшения для охватов{brand}'],

@@ -157,7 +157,9 @@ app.get('/api/frames/:jobId/:filename', async (req, res) => {
 app.get('/api/jobs/:id', async (req, res) => {
   const result = await pool.query('SELECT * FROM video_jobs WHERE id = $1', [req.params.id]);
   if (!result.rows[0]) return res.status(404).json({ error: 'Job not found' });
-  res.json(result.rows[0]);
+  const row = result.rows[0];
+  const userContext = row.user_context && typeof row.user_context === 'object' ? row.user_context : getUserContext({});
+  res.json({ ...row, user_context: userContext });
 });
 
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
