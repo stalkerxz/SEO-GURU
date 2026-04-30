@@ -112,3 +112,11 @@ python apps/worker/worker.py  # background consumer
 - Mock SEO теперь строится от `videoAngle` (auto/event/horizontal/square/vertical/generic), чтобы разные видео с одинаковым user context получали разные SEO-пакеты.
 - Frontend показывает `videoAngle` и `generationBasis` в блоке «Видео-подсказки», чтобы было видно источники различий (technical fingerprint, filename hints, user keywords, mixed context).
 - Ограничение текущей версии: computer vision/распознавания объектов пока нет, поэтому выводы строятся только по technical fingerprint, filename hints, user keywords и platform score.
+
+## PR11 / Readable mock SEO copy
+- Mock SEO-тексты очищены от внутренних technical values: служебные ключи больше не попадают в заголовки, описания, комментарии и хештеги.
+- Добавлены readable helper-функции для целей, ниш, videoAngle, resolutionClass и platform hints — SEO-копия стала человекочитаемой и готовой к публикации.
+- Улучшен приоритет videoAngle для авто-контента: auto/drift/phonk и auto/cinematic определяются раньше generic vertical short.
+- Добавлен subject detection (detectedModel, filename tokens, keywords), чтобы авто-ролики явно упоминали модель (например, BMW X3).
+- Платформенные версии (YouTube Video, Shorts, Reels, TikTok) теперь отличаются по стилю и плотности текста.
+- Backend/API контракт не менялся.
