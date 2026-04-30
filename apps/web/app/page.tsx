@@ -164,7 +164,15 @@ export default function Home() {
   const platformFit = report?.platformFit || {};
   const seoDraft = report?.seoDraft || {};
   const aiInput = report?.ai_input || {};
-  const contextSource = Object.keys(aiInput).length > 0 ? aiInput : (job?.user_context || {});
+  const fallbackContext = job?.user_context || {};
+  const contextSource = {
+    ...fallbackContext,
+    ...aiInput,
+    brandName: aiInput?.brandName || fallbackContext?.brandName || '',
+    keywords: Array.isArray(aiInput?.keywords) && aiInput.keywords.length > 0
+      ? aiInput.keywords
+      : fallbackContext?.keywords || []
+  };
   const technical = report?.technical || {};
 
   return (
@@ -248,7 +256,7 @@ export default function Home() {
 
         {job && report && (
           <section className="grid gap-4">
-            <article className={cardClass}><h2 className="text-lg font-semibold">Контекст анализа</h2><div className="mt-3 grid gap-2 text-sm sm:grid-cols-2"><MetricCard label="Цель" value={contextSource.userGoal || '—'} /><MetricCard label="Ниша" value={contextSource.niche || '—'} /><MetricCard label="Язык" value={contextSource.language || '—'} /><MetricCard label="Гео" value={contextSource.geo || '—'} /><MetricCard label="Бренд" value={contextSource.brandName || '—'} /><MetricCard label="Ключевые слова" value={(contextSource.keywords || []).join(', ') || '—'} /></div></article>
+            <article className={cardClass}><h2 className="text-lg font-semibold">Контекст анализа</h2><div className="mt-3 grid gap-2 text-sm sm:grid-cols-2"><MetricCard label="Цель" value={contextSource.userGoal || 'Не указано'} /><MetricCard label="Ниша" value={contextSource.niche || 'Не указано'} /><MetricCard label="Язык" value={contextSource.language || 'Не указано'} /><MetricCard label="Гео" value={contextSource.geo || 'Не указано'} /><MetricCard label="Бренд" value={contextSource.brandName || 'Не указано'} /><MetricCard label="Ключевые слова" value={(contextSource.keywords || []).join(', ') || 'Не указано'} /></div></article>
 
             <article className={cardClass}><h2 className="text-lg font-semibold">Технические параметры</h2><div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><MetricCard label="Длительность" value={technical.durationSec ? `${technical.durationSec} сек` : '—'} /><MetricCard label="Разрешение" value={technical.resolution || '—'} /><MetricCard label="FPS" value={technical.fps ? String(technical.fps) : '—'} /><MetricCard label="Соотношение сторон" value={technical.aspectRatio || '—'} /><MetricCard label="Аудио" value={technical.hasAudio ? 'Да' : 'Нет'} /><MetricCard label="Битрейт" value={technical.bitrate || '—'} /></div></article>
 
