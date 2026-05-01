@@ -296,13 +296,12 @@ def _resolution_class(width: int, height: int) -> str:
 
 
 def _build_content_hints(user_context: dict, technical_summary: dict) -> list[str]:
-    source_chunks = [
-        user_context.get('originalFilename', ''),
-        ' '.join(user_context.get('keywords', []) if isinstance(user_context.get('keywords', []), list) else []),
-        ' '.join((user_context.get('extractedFilenameHints', {}) or {}).get('tokens', [])),
-        json.dumps(technical_summary, ensure_ascii=False),
-    ]
+    filename = str(user_context.get('originalFilename', '') or '')
+    keywords = user_context.get('keywords', []) if isinstance(user_context.get('keywords', []), list) else []
+    extracted_tokens = (user_context.get('extractedFilenameHints', {}) or {}).get('tokens', [])
+    source_chunks = [filename, ' '.join(keywords), ' '.join(extracted_tokens), json.dumps(technical_summary, ensure_ascii=False)]
     text = ' '.join(source_chunks).lower()
+    auto_signal_text = ' '.join([filename, ' '.join(keywords), ' '.join(extracted_tokens)]).lower()
     niche = str(user_context.get('niche', 'general_video')).lower()
     auto_brands_models = [
         'bmw', 'mercedes', 'audi', 'toyota', 'kia', 'porsche', 'x3', 'x5', 'tesla', 'lexus', 'honda', 'hyundai'
@@ -314,7 +313,7 @@ def _build_content_hints(user_context: dict, technical_summary: dict) -> list[st
     resort_terms = ['море', 'пляж', 'maldives', 'мальдивы', 'курорт', 'отель', 'resort', 'beach', 'sea']
 
     hints: list[str] = []
-    has_auto_model = any(term in text for term in auto_brands_models)
+    has_auto_model = any(term in auto_signal_text for term in auto_brands_models)
     has_auto_core = any(term in text for term in ['auto', 'авто', 'car', 'cars', 'detailing', 'wheel', 'wheels', 'кузов'])
     if has_auto_model or (niche == 'auto' and (has_auto_core or 'drift' in text or 'дрифт' in text)):
         hints.append('auto_model')
@@ -346,6 +345,8 @@ def _build_content_hints(user_context: dict, technical_summary: dict) -> list[st
             hints.append('travel_scene')
         if 'destination_video' not in hints:
             hints.append('destination_video')
+    if niche == 'travel' and 'auto_model' in hints and not has_auto_model:
+        hints = [hint for hint in hints if hint != 'auto_model']
     return hints
 
 

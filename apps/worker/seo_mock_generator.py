@@ -11,9 +11,18 @@ FORBIDDEN_TERMS = {
     'generic_video', 'generic_horizontal_video'
 }
 TRAVEL_FORBIDDEN_AUTO_TERMS = {'bmw', 'drift', 'phonk', 'авто-ролик', 'street drift'}
+AUTO_BRANDS_MODELS = ['bmw', 'mercedes', 'audi', 'toyota', 'kia', 'porsche', 'x3', 'x5', 'tesla', 'lexus', 'honda', 'hyundai']
 
 
 def _contextual_meta(ai_input: Dict[str, Any]) -> Dict[str, Any]:
+    content_hints = ai_input.get('contentHints', [])
+    niche = str(ai_input.get('niche', 'general_video')).lower()
+    filename = str(ai_input.get('originalFilename', '') or '')
+    keywords = ai_input.get('keywords', []) if isinstance(ai_input.get('keywords'), list) else []
+    auto_signal_text = ' '.join([filename, ' '.join(keywords)]).lower()
+    has_explicit_auto = _has_any(auto_signal_text, AUTO_BRANDS_MODELS)
+    if niche == 'travel' and isinstance(content_hints, list) and not has_explicit_auto:
+        content_hints = [hint for hint in content_hints if hint != 'auto_model']
     return {
         'goal': ai_input.get('userGoal', 'views_and_reach'),
         'niche': ai_input.get('niche', 'general_video'),
@@ -24,7 +33,7 @@ def _contextual_meta(ai_input: Dict[str, Any]) -> Dict[str, Any]:
         'technical': ai_input.get('technicalSummary', {}),
         'filename_hints': ai_input.get('extractedFilenameHints', {}),
         'video_fingerprint': ai_input.get('videoFingerprint', {}),
-        'content_hints': ai_input.get('contentHints', []),
+        'content_hints': content_hints,
         'original_filename': ai_input.get('originalFilename', ''),
         'frame_manifest': ai_input.get('frameManifest', {}),
     }
