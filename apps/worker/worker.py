@@ -303,18 +303,50 @@ def _build_content_hints(user_context: dict, technical_summary: dict) -> list[st
         json.dumps(technical_summary, ensure_ascii=False),
     ]
     text = ' '.join(source_chunks).lower()
-    hint_rules = {
-        'auto_model': ['bmw', 'x3', 'x5'],
-        'drift': ['drift', 'дрифт'],
-        'phonk_music': ['phonk', 'фонк'],
-        'cinematic_style': ['cinematic', 'синематик'],
-        'night_scene': ['night', 'ноч', 'lights'],
-        'city_scene': ['city', 'город', 'urban'],
-        'interior': ['interior', 'салон'],
-        'review': ['review', 'обзор'],
-        'sale_video': ['sale', 'продажа', 'for sale'],
-    }
-    return [hint for hint, terms in hint_rules.items() if any(term in text for term in terms)]
+    niche = str(user_context.get('niche', 'general_video')).lower()
+    auto_brands_models = [
+        'bmw', 'mercedes', 'audi', 'toyota', 'kia', 'porsche', 'x3', 'x5', 'tesla', 'lexus', 'honda', 'hyundai'
+    ]
+    travel_terms = [
+        'travel', 'trip', 'vacation', 'maldives', 'мальдивы', 'турция', 'турецкие', 'море', 'пляж', 'отель',
+        'курорт', 'отдых', 'путешествие'
+    ]
+    resort_terms = ['море', 'пляж', 'maldives', 'мальдивы', 'курорт', 'отель', 'resort', 'beach', 'sea']
+
+    hints: list[str] = []
+    has_auto_model = any(term in text for term in auto_brands_models)
+    has_auto_core = any(term in text for term in ['auto', 'авто', 'car', 'cars', 'detailing', 'wheel', 'wheels', 'кузов'])
+    if has_auto_model or (niche == 'auto' and (has_auto_core or 'drift' in text or 'дрифт' in text)):
+        hints.append('auto_model')
+
+    if 'drift' in text or 'дрифт' in text:
+        hints.append('drift')
+    if 'phonk' in text or 'фонк' in text:
+        hints.append('phonk_music')
+    if 'cinematic' in text or 'синематик' in text:
+        hints.append('cinematic_style')
+    if any(term in text for term in ['night', 'ноч', 'lights']):
+        hints.append('night_scene')
+    if any(term in text for term in ['city', 'город', 'urban']):
+        hints.append('city_scene')
+    if any(term in text for term in ['interior', 'салон']):
+        hints.append('interior')
+    if any(term in text for term in ['review', 'обзор']):
+        hints.append('review')
+    if any(term in text for term in ['sale', 'продажа', 'for sale']):
+        hints.append('sale_video')
+
+    has_travel = niche == 'travel' or any(term in text for term in travel_terms)
+    if has_travel:
+        hints.append('travel_scene')
+        hints.append('destination_video')
+    if any(term in text for term in resort_terms):
+        hints.append('resort_or_beach')
+        if 'travel_scene' not in hints:
+            hints.append('travel_scene')
+        if 'destination_video' not in hints:
+            hints.append('destination_video')
+    return hints
 
 
 
