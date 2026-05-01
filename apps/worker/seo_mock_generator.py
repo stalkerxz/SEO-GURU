@@ -14,6 +14,26 @@ TRAVEL_FORBIDDEN_AUTO_TERMS = {'bmw', 'drift', 'phonk', 'авто-ролик', '
 AUTO_BRANDS_MODELS = ['bmw', 'mercedes', 'audi', 'toyota', 'kia', 'porsche', 'x3', 'x5', 'tesla', 'lexus', 'honda', 'hyundai']
 
 
+def safe_confidence(value: Any) -> float:
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return max(0.0, min(1.0, float(value)))
+    if isinstance(value, str):
+        raw = value.strip().lower()
+        if raw in {'high', 'medium', 'low'}:
+            return {'high': 0.8, 'medium': 0.5, 'low': 0.3}[raw]
+        try:
+            if raw.endswith('%'):
+                return max(0.0, min(1.0, float(raw[:-1].strip()) / 100.0))
+            numeric = float(raw)
+            if 0 <= numeric <= 1:
+                return numeric
+            if 1 < numeric <= 100:
+                return numeric / 100.0
+        except ValueError:
+            return 0.0
+    return 0.0
+
+
 def _contextual_meta(ai_input: Dict[str, Any]) -> Dict[str, Any]:
     content_hints = ai_input.get('contentHints', [])
     niche = str(ai_input.get('niche', 'general_video')).lower()
@@ -153,7 +173,7 @@ def _common_tips(base: List[str], meta: Dict[str, Any]) -> List[str]:
 
 def build_video_angle(meta: Dict[str, Any]) -> str:
     visual = meta.get('visual_analysis', {}) or {}
-    confidence = float(visual.get('confidence') or 0)
+    confidence = safe_confidence(visual.get('confidence'))
     if confidence >= 0.5:
         if visual.get('peoplePresent') and visual.get('eventContent'):
             return 'event_people_scene'
@@ -528,7 +548,7 @@ def generate_mock_seo_package(analysis_report: Dict[str, Any], platform: str) ->
     vf = meta.get('video_fingerprint', {}) or {}
     subject = detect_subject(meta)
     visual = meta.get('visual_analysis', {}) or {}
-    visual_confidence = float(visual.get('confidence') or 0)
+    visual_confidence = safe_confidence(visual.get('confidence'))
     if visual_confidence >= 0.5:
         angle = build_video_angle(meta)
     else:

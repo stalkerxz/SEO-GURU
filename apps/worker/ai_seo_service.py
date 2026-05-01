@@ -13,6 +13,26 @@ from seo_prompt_builder import build_ai_video_analysis_prompt, build_platform_se
 PLATFORMS = ['youtubeVideo', 'youtubeShorts', 'instagramReels', 'tiktok']
 
 
+def safe_confidence(value: Any) -> float:
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return max(0.0, min(1.0, float(value)))
+    if isinstance(value, str):
+        raw = value.strip().lower()
+        if raw in {'high', 'medium', 'low'}:
+            return {'high': 0.8, 'medium': 0.5, 'low': 0.3}[raw]
+        try:
+            if raw.endswith('%'):
+                return max(0.0, min(1.0, float(raw[:-1].strip()) / 100.0))
+            numeric = float(raw)
+            if 0 <= numeric <= 1:
+                return numeric
+            if 1 < numeric <= 100:
+                return numeric / 100.0
+        except ValueError:
+            return 0.0
+    return 0.0
+
+
 def _env_timeout_seconds() -> float:
     raw = os.getenv('AI_TIMEOUT_SECONDS', '60')
     try:
@@ -215,7 +235,7 @@ def analyze_video_frames_with_ai(ai_input: Dict[str, Any], frame_manifest: Dict[
         'suggestedVideoAngle': parsed.get('suggestedVideoAngle', ''),
         'seoHooks': parsed.get('seoHooks', []),
         'coverTextIdeas': parsed.get('coverTextIdeas', []),
-        'confidence': float(parsed.get('confidence') or 0.0),
+        'confidence': safe_confidence(parsed.get('confidence')),
         '_status': 'ok',
         '_readableFrames': readable_count,
     }
