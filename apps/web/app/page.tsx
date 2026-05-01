@@ -391,6 +391,7 @@ export default function Home() {
   const seoDraft = report?.seoDraft || {};
   const platformFit = report?.platformFit || {};
   const aiInput = report?.ai_input || {};
+  const visualAnalysis = aiInput?.visualAnalysis || null;
   const videoFingerprint = aiInput?.videoFingerprint || {};
   const statusText = useMemo(
     () => (job?.status ? statusLabels[job.status] || job.status : null),
@@ -478,6 +479,37 @@ export default function Home() {
                 <p className="text-xs text-slate-500">(technical: {aiInput?.videoAngle || 'n/a'}, basis: {(aiInput?.generationBasis || []).join(', ') || 'n/a'})</p>
                 <div className="flex flex-wrap gap-2">{(aiInput?.contentHints || []).map((hint: string) => <span key={hint} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700">{hint}</span>)}</div>
               </div>
+            </article>
+            <article className={cardClass}>
+              <h2 className="text-lg font-semibold">AI-визуальный анализ</h2>
+              {!visualAnalysis ? (
+                <p className="mt-3 text-sm text-slate-500">
+                  AI-визуальный анализ недоступен. Используется fallback по техническим данным и контексту.
+                </p>
+              ) : (
+                <div className="mt-3 space-y-3 text-sm">
+                  <p><span className="font-semibold">Краткое описание:</span> {visualAnalysis.summary || '—'}</p>
+                  <p><span className="font-semibold">Сцена:</span> {visualAnalysis.detectedScene || '—'}</p>
+                  <p><span className="font-semibold">Тип локации:</span> {visualAnalysis.detectedLocationType || '—'}</p>
+                  <p><span className="font-semibold">Предложенная ниша:</span> {visualAnalysis.suggestedNiche || '—'}</p>
+                  <p><span className="font-semibold">Предложенный угол:</span> {visualAnalysis.suggestedVideoAngle || '—'}</p>
+                  <p><span className="font-semibold">Уверенность:</span> {visualAnalysis.confidence ?? '—'}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="w-full text-xs font-semibold text-slate-600">Объекты</span>
+                    {(visualAnalysis.detectedObjects || []).map((x: string, i: number) => <span key={`obj-${i}`} className="rounded-full bg-slate-100 px-2 py-1 text-xs">{x}</span>)}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="w-full text-xs font-semibold text-slate-600">Стиль</span>
+                    {(visualAnalysis.style || []).map((x: string, i: number) => <span key={`style-${i}`} className="rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-800">{x}</span>)}
+                    <span className="w-full text-xs font-semibold text-slate-600">Настроение</span>
+                    {(visualAnalysis.mood || []).map((x: string, i: number) => <span key={`mood-${i}`} className="rounded-full bg-emerald-100 px-2 py-1 text-xs text-emerald-800">{x}</span>)}
+                  </div>
+                  <p className="text-xs font-semibold text-slate-600">Лучшие кадры</p>
+                  <ul className="list-disc pl-5">
+                    {(visualAnalysis.bestFrames || []).map((f: any, i: number) => <li key={`best-${i}`}>Frame {f.frameIndex}: {f.reason}</li>)}
+                  </ul>
+                </div>
+              )}
             </article>
 
             <article className={cardClass}>

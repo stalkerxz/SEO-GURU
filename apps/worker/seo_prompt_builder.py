@@ -20,6 +20,8 @@ def build_ai_video_analysis_prompt(ai_input: Dict[str, Any]) -> str:
         'Верни только валидный JSON без markdown. Тексты должны быть готовы к копированию и публикации. '
         'Если бренд указан — аккуратно используй его в описании/CTA. Если гео указано — добавляй его уместно для локального продвижения. '
         'Используй videoFingerprint, contentHints и frameManifest для video-specific результата по конкретному ролику. '
+        'Используй visualAnalysis как приоритетный источник, если он есть и confidence высокий. '
+        'Не делай выводы только по filename — это weak hint. '
         'Если визуальный контент не распознан, не выдумывай объекты и сцены — опирайся только на технические и контекстные hints. '
         f'\n\nВходные данные (JSON):\n{ai_input}'
     )
@@ -35,7 +37,7 @@ def build_platform_seo_prompt(platform: str, ai_input: Dict[str, Any]) -> str:
         'Верни только валидный JSON, структура должна строго соответствовать нужной платформе. '
         'Сделай тексты готовыми к публикации. Бренд и гео используй только уместно. '
         'SEO must be specific to this exact video, not only to user keywords. '
-        'Use videoFingerprint and contentHints. '
-        'If visual content is unknown, do not invent objects; use filename/context hints carefully. '
+        'Use visual evidence first (visualAnalysis + frameManifest), then videoFingerprint/contentHints as fallback. '
+        'No generic copy. No filename-only assumptions. Mention uncertainty if content is unclear. '
         f'\n\nПлатформа: {platform}\nВходные данные (JSON):\n{ai_input}'
     )

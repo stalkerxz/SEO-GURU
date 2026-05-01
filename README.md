@@ -101,6 +101,15 @@ python apps/worker/worker.py  # background consumer
 - интеграции YouTube/Instagram/TikTok
 - сложная тренд-аналитика
 
+## AI режимы (mock/openai)
+- `AI_PROVIDER=mock`: работает без ключа OpenAI, SEO строится на техническом анализе, контексте и эвристиках fallback.
+- `AI_PROVIDER=openai` + `OPENAI_API_KEY`: включается AI-анализ выбранных кадров (`frameManifest`) и генерация SEO с приоритетом визуальных сигналов.
+- Кадры анализируются выборочно (не всё видео целиком), чтобы снизить стоимость и ускорить обработку.
+- `filename` используется только как weak hint, а не как основной источник смысла.
+- Проверка mock mode: `visualAnalysis` отсутствует, `analysisBasis=mock_heuristics`.
+- Проверка openai+MinIO mode: при читаемых кадрах появляется `visualAnalysis`.
+- Если кадры недоступны для чтения: job завершается со статусом `done`, а в `aiWarnings` появляется `Visual AI analysis skipped: no readable frames.`
+
 ## PR8 / UI refresh
 - Полностью обновлён интерфейс `apps/web` в стиле минималистичного SaaS dashboard (mobile-first, карточная структура, улучшенная визуальная иерархия).
 - Функциональность сервиса не изменялась: backend-логика, worker-логика и API-контракты сохранены.
