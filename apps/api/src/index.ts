@@ -60,6 +60,19 @@ const parseKeywords = (raw: string | undefined) =>
     .map((keyword) => keyword.trim())
     .filter(Boolean);
 
+const decodeFilename = (originalname: string): string => {
+  if (!originalname) return originalname;
+  try {
+    const decoded = Buffer.from(originalname, 'latin1').toString('utf8');
+    const hasCyrillic = /[А-Яа-яЁё]/.test(decoded);
+    const hasReplacement = decoded.includes('�');
+    if (hasCyrillic && !hasReplacement) return decoded;
+  } catch (_error) {
+    // keep original filename
+  }
+  return originalname;
+};
+
 const getUserContext = (body: Record<string, unknown>) => ({
   userGoal: typeof body.userGoal === 'string' && body.userGoal.trim() ? body.userGoal.trim() : 'views_and_reach',
   niche: typeof body.niche === 'string' && body.niche.trim() ? body.niche.trim() : 'general_video',
@@ -108,7 +121,8 @@ app.post('/api/videos/upload', upload.single('video'), async (req, res) => {
 
   const userContext = getUserContext(req.body as Record<string, unknown>);
   const jobId = randomUUID();
-  const originalFilename = req.file.originalname;
+  const originalFilename = decodeFilename(req.file.originalname);
+  const enrichedUserContext = { ...userContext, originalFilename };
   const ext = path.extname(originalFilename).toLowerCase();
   const key = `videos/${jobId}${ext}`;
 
@@ -125,7 +139,7 @@ app.post('/api/videos/upload', upload.single('video'), async (req, res) => {
     fs.writeFileSync(target, req.file.buffer);
   }
 
-  await pool.query('INSERT INTO video_jobs (id, filename, storage_key, status, user_context) VALUES ($1, $2, $3, $4, $5)', [jobId, originalFilename, key, 'queued', JSON.stringify(userContext)]);
+  await pool.query('INSERT INTO video_jobs (id, filename, storage_key, status, user_context) VALUES ($1, $2, $3, $4, $5)', [jobId, originalFilename, key, 'queued', JSON.stringify(enrichedUserContext)]);
   await redis.lpush('video_jobs_queue', JSON.stringify({ id: jobId, storageKey: key }));
   res.json({ jobId, status: 'queued' });
 });
