@@ -9,6 +9,7 @@ FORBIDDEN_TERMS = {
     'user_keywords', 'mixed_context', 'auto_drift_phonk', 'auto_cinematic', 'auto_detail_showcase',
     'generic_video', 'generic_horizontal_video'
 }
+TRAVEL_FORBIDDEN_AUTO_TERMS = {'bmw', 'drift', 'phonk', 'авто-ролик', 'street drift'}
 
 
 def _contextual_meta(ai_input: Dict[str, Any]) -> Dict[str, Any]:
@@ -33,6 +34,29 @@ def _text_blob(meta: Dict[str, Any]) -> str:
     keywords = meta.get('keywords', []) if isinstance(meta.get('keywords'), list) else []
     hints = meta.get('content_hints', []) if isinstance(meta.get('content_hints'), list) else []
     return ' '.join([meta.get('original_filename', ''), ' '.join(tokens), ' '.join(keywords), ' '.join(hints)]).lower()
+
+
+def _has_any(text: str, terms: List[str]) -> bool:
+    return any(term in text for term in terms)
+
+
+def _has_travel_signal(meta: Dict[str, Any], text: str) -> bool:
+    return str(meta.get('niche', '')).lower() == 'travel' or _has_any(
+        text, ['travel', 'trip', 'vacation', 'maldives', 'мальдивы', 'турция', 'турецкие', 'море', 'пляж', 'отель', 'курорт', 'отдых', 'путешествие']
+    )
+
+
+def _has_resort_signal(text: str) -> bool:
+    return _has_any(text, ['море', 'пляж', 'maldives', 'мальдивы', 'курорт', 'отель', 'resort', 'beach', 'sea'])
+
+
+def _has_strong_auto_signal(meta: Dict[str, Any], text: str) -> bool:
+    niche = str(meta.get('niche', '')).lower()
+    has_model = _has_any(text, ['bmw', 'mercedes', 'audi', 'toyota', 'kia', 'porsche', 'x3', 'x5'])
+    has_core = _has_any(text, ['auto', 'авто', 'car', 'cars', 'wheel', 'wheels', 'диск', 'диски', 'detailing', 'кузов'])
+    has_auto_salon = 'салон' in text and _has_any(text, ['авто', 'car', 'bmw', 'audi', 'mercedes'])
+    has_drift_strong = _has_any(text, ['drift', 'дрифт']) and (niche == 'auto' or has_model or has_core)
+    return has_model or has_core or has_auto_salon or has_drift_strong or (niche == 'auto' and _has_any(text, ['review', 'обзор', 'sale', 'продажа']))
 
 
 def readable_goal(goal: str) -> str:
@@ -87,11 +111,15 @@ def detect_subject(meta: Dict[str, Any]) -> str:
         return model
     tokens = ' '.join((meta.get('filename_hints', {}) or {}).get('tokens', [])).lower()
     text = _text_blob(meta)
+    if 'турецкие мальдивы' in text:
+        return 'Турецкие Мальдивы'
+    if _has_travel_signal(meta, text):
+        return 'путешествие'
     if 'bmw' in tokens and 'x3' in tokens or 'bmw x3' in text:
         return 'BMW X3'
     if 'bmw' in tokens and 'x5' in tokens or 'bmw x5' in text:
         return 'BMW X5'
-    if any(x in text for x in ['drift', 'phonk', 'авто', 'car']):
+    if _has_strong_auto_signal(meta, text):
         return 'авто-ролик'
     return 'ролик'
 
@@ -118,12 +146,11 @@ def build_video_angle(meta: Dict[str, Any]) -> str:
     orientation = vf.get('orientation')
     res_class = vf.get('resolutionClass')
     duration_bucket = vf.get('durationBucket')
-    visual_hint = vf.get('visualRhythmHint', '')
+    duration_sec = float((meta.get('technical', {}) or {}).get('durationSec') or 0)
     text = _text_blob(meta)
     niche = str(meta.get('niche', 'general_video')).lower()
-
-    auto_terms = ['auto', 'bmw', 'x3', 'x5', 'car', 'drift', 'авто', 'дрифт', 'phonk', 'cinematic']
-    has_auto = niche == 'auto' or any(term in text for term in auto_terms) or bool(vf.get('detectedModel'))
+    has_auto = _has_strong_auto_signal(meta, text) or bool(vf.get('detectedModel'))
+    has_travel = _has_travel_signal(meta, text) or _has_any(' '.join(meta.get('content_hints', [])), ['travel_scene', 'destination_video', 'resort_or_beach'])
 
     if orientation == 'square' and res_class == 'low':
         return 'square_low_quality_social_clip'
@@ -137,9 +164,15 @@ def build_video_angle(meta: Dict[str, Any]) -> str:
             return 'auto_sale'
         if 'detail' in text or 'detailing' in text or 'wheel' in text or 'кузов' in text or 'диск' in text:
             return 'auto_detail_showcase'
-        if 'cinematic' in text or visual_hint in {'extended_story', 'mixed'}:
-            return 'auto_cinematic'
         return 'auto_cinematic'
+
+    if has_travel:
+        if orientation == 'vertical' and 0 < duration_sec <= 180:
+            return 'travel_destination_short'
+        if _has_resort_signal(text) or 'resort_or_beach' in (meta.get('content_hints') or []):
+            return 'travel_resort_reels'
+        if orientation == 'horizontal':
+            return 'travel_horizontal_story'
 
     if orientation == 'horizontal' and res_class == 'full_hd':
         return 'horizontal_youtube_story'
@@ -169,9 +202,24 @@ def _assert_readable(pack: Dict[str, Any]) -> None:
     for term in FORBIDDEN_TERMS:
         if term.lower() in blob:
             raise ValueError(f'Forbidden technical term leaked into SEO copy: {term}')
+    if str(pack.get('niche', '')).lower() == 'travel':
+        for term in TRAVEL_FORBIDDEN_AUTO_TERMS:
+            if term in blob:
+                raise ValueError(f'Forbidden auto term leaked into travel SEO copy: {term}')
 
 
 def build_youtube_video_package(meta: Dict[str, Any], angle: str, subject: str, tips: List[str]) -> Dict[str, Any]:
+    if angle in {'travel_destination_short', 'travel_resort_reels', 'travel_horizontal_story'}:
+        return {
+            'bestTitle': f'{subject}: расширенный travel-влог для YouTube',
+            'titleOptions': ['Турецкие Мальдивы: расширенный travel-влог', 'Маршрут, локации и советы по поездке', 'Как спланировать отдых в формате travel story'],
+            'description': 'Этот материал лучше работает как Shorts/Reels/TikTok в коротком формате.\n\n'
+                           'Классический YouTube Video имеет смысл делать в формате расширенного travel-влога: маршрут, логистика, бюджет, советы и личные впечатления.',
+            'tags': [subject, 'travel vlog', 'турция', 'путешествие', 'куда поехать', 'курорт'],
+            'thumbnailText': 'TRAVEL VLOG',
+            'pinnedComment': 'Сделать расширенную версию с маршрутом и советами?',
+            'improvementTips': tips + ['Для текущего короткого ролика приоритет — Shorts/Reels/TikTok.', 'Для YouTube Video добавьте полезный travel-контекст.']
+        }
     if angle == 'horizontal_youtube_story':
         return {
             'bestTitle': 'Горизонтальный ролик для YouTube: сильный формат',
@@ -225,6 +273,17 @@ def build_youtube_video_package(meta: Dict[str, Any], angle: str, subject: str, 
 
 
 def build_youtube_shorts_package(meta: Dict[str, Any], angle: str, subject: str, tips: List[str]) -> Dict[str, Any]:
+    if angle in {'travel_destination_short', 'travel_resort_reels'}:
+        return {
+            'bestTitle': 'Турецкие Мальдивы за 15 секунд' if 'турецкие мальдивы' in subject.lower() else f'{subject} за 15 секунд',
+            'titleOptions': ['Турецкие Мальдивы за 15 секунд', 'Место в Турции, которое похоже на Мальдивы', 'Travel Shorts: идея для отпуска'],
+            'description': 'Короткий travel-ролик про атмосферное место для отдыха. Идея для поездки, если хочется моря, пляжа и красивых кадров.',
+            'hashtags': ['#Shorts', '#Travel', '#Турция', '#Мальдивы', '#Путешествия', '#Отдых'],
+            'coverText': 'ТУРЕЦКИЕ МАЛЬДИВЫ',
+            'pinnedComment': 'Хотели бы сюда попасть?',
+            'hookText': 'Это Турция или Мальдивы?',
+            'improvementTips': tips
+        }
     if angle == 'horizontal_youtube_story':
         return {
             'bestTitle': 'Сильный момент из YouTube-ролика',
@@ -271,6 +330,18 @@ def build_youtube_shorts_package(meta: Dict[str, Any], angle: str, subject: str,
 
 
 def build_instagram_reels_package(meta: Dict[str, Any], angle: str, subject: str, tips: List[str]) -> Dict[str, Any]:
+    if angle in {'travel_destination_short', 'travel_resort_reels', 'travel_horizontal_story'}:
+        return {
+            'caption': 'Турецкие Мальдивы — звучит как миф, выглядит как идеальный план на отдых. Спокойная вода, свет и атмосфера места, куда хочется вернуться.',
+            'firstLineHook': 'Турецкие Мальдивы — место, где хочется выключить телефон',
+            'hashtags': ['#travel', '#турция', '#путешествия', '#отдых', '#reels'],
+            'altText': 'Короткий travel-ролик о курортном месте в Турции с морем и пляжем.',
+            'coverText': 'TRAVEL / RESORT',
+            'pinnedComment': 'Какой момент этого места вам понравился больше всего?',
+            'storyAnnouncement': 'Показываю место, которое легко принять за Мальдивы.',
+            'cta': 'Сохрани идею для поездки.',
+            'improvementTips': tips
+        }
     if angle == 'horizontal_youtube_story':
         return {
             'caption': 'Горизонтальный исходник лучше превратить в вертикальный Reels: взять самый сильный момент и добавить крупный текст.',
@@ -321,6 +392,17 @@ def build_instagram_reels_package(meta: Dict[str, Any], angle: str, subject: str
 
 
 def build_tiktok_package(meta: Dict[str, Any], angle: str, subject: str, tips: List[str]) -> Dict[str, Any]:
+    if angle in {'travel_destination_short', 'travel_resort_reels', 'travel_horizontal_story'}:
+        return {
+            'caption': 'Турецкие Мальдивы — звучит как миф, выглядит как план.',
+            'hookText': 'Это Турция или Мальдивы?',
+            'hashtags': ['#travel', '#турция', '#отдых', '#кудапоехать'],
+            'coverText': 'TURKEY OR MALDIVES?',
+            'pinnedComment': 'Добавить список похожих мест в следующем видео?',
+            'cta': 'Сохрани, чтобы не потерять место.',
+            'trendAngle': 'travel destination reveal',
+            'improvementTips': tips
+        }
     if angle == 'horizontal_youtube_story':
         return {
             'caption': 'Из длинного ролика — короткий TikTok. Что оставить первым кадром?',
@@ -386,6 +468,7 @@ def generate_mock_seo_package(analysis_report: Dict[str, Any], platform: str) ->
         pack = build_instagram_reels_package(meta, angle, subject, base_tips)
     else:
         pack = build_tiktok_package(meta, angle, subject, base_tips)
+    pack['niche'] = meta.get('niche', 'general_video')
     _assert_readable(pack)
     pack['videoAngle'] = angle
     pack['generationBasis'] = generation_basis

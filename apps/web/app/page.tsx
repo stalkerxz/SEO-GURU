@@ -51,6 +51,9 @@ const contextLabels: Record<string, string> = {
   food: 'Еда',
   education: 'Образование',
   general_video: 'Общее видео',
+  travel_destination_short: 'Travel / направление',
+  travel_resort_reels: 'Travel / курорт',
+  travel_horizontal_story: 'Travel / YouTube story',
   ru: 'Русский',
   en: 'Английский'
 };
