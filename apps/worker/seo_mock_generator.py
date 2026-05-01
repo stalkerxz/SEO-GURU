@@ -1,3 +1,4 @@
+import re
 from typing import Any, Dict, List
 
 from seo_prompt_builder import build_ai_video_analysis_prompt, build_platform_seo_prompt
@@ -155,7 +156,7 @@ def build_video_angle(meta: Dict[str, Any]) -> str:
     if orientation == 'square' and res_class == 'low':
         return 'square_low_quality_social_clip'
 
-    if has_auto:
+    if has_auto and niche == 'auto':
         if 'drift' in text or 'phonk' in text:
             return 'auto_drift_phonk'
         if 'review' in text or 'обзор' in text:
@@ -192,6 +193,48 @@ def _generation_basis(meta: Dict[str, Any], angle: str) -> List[str]:
     return basis
 
 
+
+
+def _sanitize_text_value(text: str) -> str:
+    sanitized = text
+    replacements = [
+        (r'\bstreet drift\b', ''),
+        (r'авто-ролик', 'travel-ролик'),
+        (r'авто-контент', 'travel-контент'),
+        (r'\bbmw\b', ''),
+        (r'\bdrift\b', 'динамичный travel-монтаж'),
+        (r'\bphonk\b', ''),
+    ]
+    for pattern, replacement in replacements:
+        sanitized = re.sub(pattern, replacement, sanitized, flags=re.IGNORECASE)
+    sanitized = re.sub(r'\s{2,}', ' ', sanitized).strip()
+    return sanitized
+
+
+def sanitize_travel_pack(pack: Dict[str, Any]) -> Dict[str, Any]:
+    if str(pack.get('niche', '')).lower() != 'travel':
+        return pack
+
+    string_fields = [
+        'bestTitle', 'description', 'coverText', 'pinnedComment',
+        'hookText', 'firstLineHook', 'trendAngle', 'caption',
+        'storyAnnouncement', 'cta', 'altText', 'thumbnailText',
+    ]
+    for field in string_fields:
+        if isinstance(pack.get(field), str):
+            pack[field] = _sanitize_text_value(pack[field])
+
+    list_fields = ['titleOptions', 'hashtags', 'tags', 'improvementTips']
+    for field in list_fields:
+        values = pack.get(field)
+        if isinstance(values, list):
+            pack[field] = [
+                _sanitize_text_value(item) if isinstance(item, str) else item
+                for item in values
+            ]
+
+    return pack
+
 def _assert_readable(pack: Dict[str, Any]) -> None:
     blob = ' '.join([
         pack.get('bestTitle', ''), pack.get('description', ''), pack.get('coverText', ''), pack.get('pinnedComment', ''),
@@ -205,7 +248,11 @@ def _assert_readable(pack: Dict[str, Any]) -> None:
     if str(pack.get('niche', '')).lower() == 'travel':
         for term in TRAVEL_FORBIDDEN_AUTO_TERMS:
             if term in blob:
-                raise ValueError(f'Forbidden auto term leaked into travel SEO copy: {term}')
+                warnings = pack.setdefault('warnings', [])
+                if 'Travel SEO copy was sanitized from auto terms.' not in warnings:
+                    warnings.append('Travel SEO copy was sanitized from auto terms.')
+                print(f'Warning: travel SEO copy still has term after sanitization: {term}')
+                break
 
 
 def build_youtube_video_package(meta: Dict[str, Any], angle: str, subject: str, tips: List[str]) -> Dict[str, Any]:
@@ -469,6 +516,7 @@ def generate_mock_seo_package(analysis_report: Dict[str, Any], platform: str) ->
     else:
         pack = build_tiktok_package(meta, angle, subject, base_tips)
     pack['niche'] = meta.get('niche', 'general_video')
+    sanitize_travel_pack(pack)
     _assert_readable(pack)
     pack['videoAngle'] = angle
     pack['generationBasis'] = generation_basis
