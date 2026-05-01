@@ -473,9 +473,28 @@ def analyze_file(file_path: str, job_id: str, user_context):
             analysis_report.get('ai_input', {}),
             analysis_report.get('ai_input', {}).get('frameManifest', {}),
         )
-        if visual_analysis:
+        if visual_analysis.get('_status') == 'skipped_no_readable_frames':
+            ai_warnings.append('Visual AI analysis skipped: no readable frames.')
+            analysis_report['ai_input']['analysisBasis'] = 'mock_heuristics'
+        elif visual_analysis.get('_status') == 'invalid_response':
+            ai_warnings.append('Visual AI analysis skipped: invalid model response.')
+            analysis_report['ai_input']['analysisBasis'] = 'mock_heuristics'
+        elif visual_analysis:
+            visual_analysis.pop('_status', None)
+            visual_analysis.pop('_readableFrames', None)
             analysis_report['ai_input']['visualAnalysis'] = visual_analysis
             analysis_report['ai_input']['analysisBasis'] = 'visual_ai'
+            meta_for_angle = {
+                'niche': analysis_report['ai_input'].get('niche', 'general_video'),
+                'keywords': analysis_report['ai_input'].get('keywords', []),
+                'technical': analysis_report['ai_input'].get('technicalSummary', {}),
+                'video_fingerprint': analysis_report['ai_input'].get('videoFingerprint', {}),
+                'content_hints': analysis_report['ai_input'].get('contentHints', []),
+                'filename_hints': analysis_report['ai_input'].get('extractedFilenameHints', {}),
+                'original_filename': analysis_report['ai_input'].get('originalFilename', ''),
+                'visual_analysis': visual_analysis,
+            }
+            analysis_report['ai_input']['videoAngle'] = build_video_angle(meta_for_angle)
         else:
             analysis_report['ai_input']['analysisBasis'] = 'mock_heuristics'
     except Exception as exc:

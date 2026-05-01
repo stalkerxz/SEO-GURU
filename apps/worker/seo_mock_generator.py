@@ -527,7 +527,12 @@ def generate_mock_seo_package(analysis_report: Dict[str, Any], platform: str) ->
     meta['visual_analysis'] = ai_input.get('visualAnalysis', {}) if isinstance(ai_input, dict) else {}
     vf = meta.get('video_fingerprint', {}) or {}
     subject = detect_subject(meta)
-    angle = ai_input.get('videoAngle') or build_video_angle(meta)
+    visual = meta.get('visual_analysis', {}) or {}
+    visual_confidence = float(visual.get('confidence') or 0)
+    if visual_confidence >= 0.5:
+        angle = build_video_angle(meta)
+    else:
+        angle = ai_input.get('videoAngle') or build_video_angle(meta)
     generation_basis = ai_input.get('generationBasis') or _generation_basis(meta, angle)
 
     base_tips = _common_tips(['Проверьте первые секунды: они должны сразу цеплять внимание.'], meta)
