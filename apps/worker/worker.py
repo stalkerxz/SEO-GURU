@@ -10,7 +10,7 @@ import boto3
 import psycopg2
 import redis
 
-from ai_seo_service import generate_seo_packages
+from ai_seo_service import analyze_video_frames_with_ai, generate_seo_packages
 from seo_mock_generator import build_video_angle
 
 REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379')
@@ -467,7 +467,23 @@ def analyze_file(file_path: str, job_id: str, user_context):
         }, ensure_ascii=False)
     )
 
-    seo_draft, ai_provider_used, ai_fallback_used, ai_warnings = generate_seo_packages(analysis_report)
+    ai_warnings = []
+    try:
+        visual_analysis = analyze_video_frames_with_ai(
+            analysis_report.get('ai_input', {}),
+            analysis_report.get('ai_input', {}).get('frameManifest', {}),
+        )
+        if visual_analysis:
+            analysis_report['ai_input']['visualAnalysis'] = visual_analysis
+            analysis_report['ai_input']['analysisBasis'] = 'visual_ai'
+        else:
+            analysis_report['ai_input']['analysisBasis'] = 'mock_heuristics'
+    except Exception as exc:
+        ai_warnings.append(f'Visual AI analysis failed, fallback to mock heuristics: {exc}')
+        analysis_report['ai_input']['analysisBasis'] = 'mock_heuristics'
+
+    seo_draft, ai_provider_used, ai_fallback_used, seo_warnings = generate_seo_packages(analysis_report)
+    ai_warnings.extend(seo_warnings)
     analysis_report['seoDraft'] = seo_draft
     analysis_report['aiProviderUsed'] = ai_provider_used
     analysis_report['aiFallbackUsed'] = ai_fallback_used

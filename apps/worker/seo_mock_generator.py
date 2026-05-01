@@ -152,6 +152,20 @@ def _common_tips(base: List[str], meta: Dict[str, Any]) -> List[str]:
 
 
 def build_video_angle(meta: Dict[str, Any]) -> str:
+    visual = meta.get('visual_analysis', {}) or {}
+    confidence = float(visual.get('confidence') or 0)
+    if confidence >= 0.5:
+        if visual.get('peoplePresent') and visual.get('eventContent'):
+            return 'event_people_scene'
+        if visual.get('vehiclePresent'):
+            return 'auto_detail_showcase'
+        if visual.get('autoContent'):
+            return 'auto_cinematic'
+        if visual.get('travelContent'):
+            return 'travel_destination_short'
+        if visual.get('eventContent'):
+            return 'event_scene'
+
     vf = meta.get('video_fingerprint', {}) or {}
     orientation = vf.get('orientation')
     res_class = vf.get('resolutionClass')
@@ -510,6 +524,7 @@ def generate_mock_seo_package(analysis_report: Dict[str, Any], platform: str) ->
     _ = build_platform_seo_prompt(platform, ai_input)
 
     meta = _contextual_meta(ai_input)
+    meta['visual_analysis'] = ai_input.get('visualAnalysis', {}) if isinstance(ai_input, dict) else {}
     vf = meta.get('video_fingerprint', {}) or {}
     subject = detect_subject(meta)
     angle = ai_input.get('videoAngle') or build_video_angle(meta)

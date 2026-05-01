@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import base64
 from typing import Any, Dict, List, Tuple
 
 from openai import OpenAI
@@ -106,3 +107,56 @@ def generate_seo_packages(analysis_report: Dict[str, Any]) -> Tuple[Dict[str, An
         warnings.append(warning)
         seo = {platform: generate_mock_seo_package(analysis_report, platform) for platform in PLATFORMS}
         return seo, 'mock', True, warnings
+def analyze_video_frames_with_ai(ai_input: Dict[str, Any], frame_manifest: Dict[str, Any]) -> Dict[str, Any]:
+    provider = os.getenv('AI_PROVIDER', 'mock').lower().strip() or 'mock'
+    if provider != 'openai' or not os.getenv('OPENAI_API_KEY', '').strip():
+        return {}
+
+    frames = (frame_manifest or {}).get('frames', [])
+    if not isinstance(frames, list) or not frames:
+        return {}
+
+    selected = frames[: min(6, len(frames))]
+    content: List[Dict[str, Any]] = [{
+        'type': 'input_text',
+        'text': (
+            'Analyze these frames as representative frames from one video. '
+            'Do not invent objects not visible in the frames. If uncertain, say uncertain. '
+            'Determine whether this is travel, auto, event, real estate, beauty, food, education, product, or generic. '
+            'Identify what should drive SEO. Suggest platform-specific content angles. Return only valid JSON. '
+            'Ответ JSON. Тексты summary/hooks/coverTextIdeas на языке userContext.language. '
+            'Не использовать filename как основной источник. Filename можно учитывать только как weak hint. '
+            'JSON schema: {"summary":"","detectedObjects":[],"detectedScene":"","detectedLocationType":"",'
+            '"peoplePresent":false,"vehiclePresent":false,"travelContent":false,"autoContent":false,'
+            '"eventContent":false,"productContent":false,"style":[],"mood":[],"visualStrengths":[],'
+            '"visualWeaknesses":[],"bestFrames":[{"frameIndex":0,"reason":""}],"suggestedNiche":"",'
+            '"suggestedVideoAngle":"","seoHooks":[],"coverTextIdeas":[],"confidence":0.0}'
+        ),
+    }]
+
+    for frame in selected:
+        storage_key = frame.get('storageKey')
+        if not storage_key:
+            continue
+        file_path = os.path.join(os.getenv('LOCAL_STORAGE_PATH', '/app/storage'), storage_key)
+        if not os.path.exists(file_path):
+            continue
+        with open(file_path, 'rb') as fp:
+            encoded = base64.b64encode(fp.read()).decode('utf-8')
+        content.append({'type': 'input_image', 'image_url': f'data:image/jpeg;base64,{encoded}'})
+
+    if len(content) <= 1:
+        return {}
+
+    timeout_seconds = _env_timeout_seconds()
+    client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'), timeout=timeout_seconds)
+    model = os.getenv('OPENAI_VISION_MODEL', os.getenv('OPENAI_MODEL', 'gpt-4.1-mini'))
+    response = client.responses.create(
+        model=model,
+        input=[
+            {'role': 'system', 'content': 'Return only valid JSON.'},
+            {'role': 'user', 'content': content},
+        ],
+    )
+    parsed = extract_json_from_text(response.output_text)
+    return parsed if isinstance(parsed, dict) else {}
