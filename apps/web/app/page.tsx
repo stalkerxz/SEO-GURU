@@ -54,6 +54,9 @@ const contextLabels: Record<string, string> = {
   travel_destination_short: 'Travel / направление',
   travel_resort_reels: 'Travel / курорт',
   travel_horizontal_story: 'Travel / YouTube story',
+  urban_drive: 'Городская поездка',
+  urban_drive_sunset: 'Городская поездка на закате',
+  urban_drive_cinematic: 'Атмосферная городская поездка',
   ru: 'Русский',
   en: 'Английский'
 };
@@ -475,7 +478,7 @@ export default function Home() {
               <h2 className="text-lg font-semibold">Видео-подсказки</h2>
               <div className="mt-3 space-y-2">
                 <p className="text-xl font-semibold">{videoFingerprint.orientation?.includes('horiz') ? 'Горизонтальный формат' : 'Вертикальный короткий ролик'}</p>
-                <p className="text-base">{readable(aiInput?.videoAngle || '') || 'Авто / cinematic'}</p>
+                <p className="text-base">{readable(aiInput?.videoAngle || '') || 'Не определено'}</p>
                 <p className="text-xs text-slate-500">(technical: {aiInput?.videoAngle || 'n/a'}, basis: {(aiInput?.generationBasis || []).join(', ') || 'n/a'})</p>
                 <div className="flex flex-wrap gap-2">{(aiInput?.contentHints || []).map((hint: string) => <span key={hint} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700">{hint}</span>)}</div>
               </div>

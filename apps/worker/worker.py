@@ -495,6 +495,11 @@ def analyze_file(file_path: str, job_id: str, user_context):
                 'visual_analysis': visual_analysis,
             }
             analysis_report['ai_input']['videoAngle'] = build_video_angle(meta_for_angle)
+            analysis_report['ai_input']['generationBasis'] = [
+                'visual_ai',
+                'technical_fingerprint',
+                'user_context',
+            ]
         else:
             analysis_report['ai_input']['analysisBasis'] = 'mock_heuristics'
     except Exception as exc:
