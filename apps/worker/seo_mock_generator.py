@@ -115,6 +115,9 @@ def readable_angle(angle: str) -> str:
         'auto_review': 'авто / обзор',
         'auto_sale': 'авто / продажа',
         'auto_detail_showcase': 'авто / детали',
+        'urban_drive': 'городская поездка',
+        'urban_drive_sunset': 'городская поездка на закате',
+        'urban_drive_cinematic': 'атмосферная городская поездка',
     }.get(str(angle), 'универсальный формат ролика')
 
 
@@ -175,16 +178,54 @@ def build_video_angle(meta: Dict[str, Any]) -> str:
     visual = meta.get('visual_analysis', {}) or {}
     confidence = safe_confidence(visual.get('confidence'))
     if confidence >= 0.5:
+        visual_text = ' '.join([
+            str(visual.get('summary', '')),
+            str(visual.get('detectedScene', '')),
+            str(visual.get('detectedLocationType', '')),
+            str(visual.get('suggestedNiche', '')),
+            str(visual.get('suggestedVideoAngle', '')),
+            ' '.join(str(item) for item in visual.get('detectedObjects', []) if item),
+            ' '.join(str(item) for item in visual.get('style', []) if item),
+            ' '.join(str(item) for item in visual.get('mood', []) if item),
+        ]).lower()
+        urban_scene = _has_any(visual_text, [
+            'urban', 'city', 'cityscape', 'traffic', 'road', 'street',
+            'город', 'городск', 'трафик', 'дорог', 'улиц',
+        ])
+        sunset_scene = _has_any(visual_text, [
+            'sunset', 'dusk', 'golden hour', 'evening',
+            'закат', 'вечер', 'сумерк', 'золотой час',
+        ])
+        cinematic_scene = _has_any(visual_text, [
+            'cinematic', 'dramatic', 'night', 'атмосфер', 'кинематограф',
+            'драмат', 'ночн', 'загадоч',
+        ])
+        auto_hero = bool(visual.get('autoContent')) and _has_any(visual_text, [
+            'automotive', 'car showcase', 'vehicle showcase', 'car detail', 'close-up car',
+            'автомобиль крупным планом', 'детали автомобиля', 'обзор автомобиля',
+            'автомобильный контент', 'автоконтент', 'авто-контент',
+        ])
+
         if visual.get('peoplePresent') and visual.get('eventContent'):
             return 'event_people_scene'
-        if visual.get('vehiclePresent'):
-            return 'auto_detail_showcase'
-        if visual.get('autoContent'):
-            return 'auto_cinematic'
-        if visual.get('travelContent'):
+        if visual.get('travelContent') and not auto_hero:
             return 'travel_destination_short'
         if visual.get('eventContent'):
             return 'event_scene'
+        if visual.get('vehiclePresent') and urban_scene:
+            if sunset_scene:
+                return 'urban_drive_sunset'
+            if cinematic_scene:
+                return 'urban_drive_cinematic'
+            return 'urban_drive'
+        if auto_hero:
+            if _has_any(visual_text, ['detail', 'close-up', 'детал', 'крупным планом']):
+                return 'auto_detail_showcase'
+            return 'auto_cinematic'
+        if visual.get('autoContent'):
+            return 'auto_cinematic'
+        if visual.get('vehiclePresent'):
+            return 'urban_drive_cinematic' if cinematic_scene else 'urban_drive'
 
     vf = meta.get('video_fingerprint', {}) or {}
     orientation = vf.get('orientation')
