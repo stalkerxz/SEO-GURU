@@ -141,6 +141,78 @@ class VisualAiAuthorityTests(unittest.TestCase):
             )
             self.assertEqual(package['seoCompletionMode'], 'ai_visual_completion')
 
+    def test_platform_timeout_completes_from_visual_evidence_without_mock_copy(self):
+        report = {'ai_input': build_ai_input()}
+
+        with patch.dict(os.environ, {'AI_PROVIDER': 'openai', 'OPENAI_API_KEY': 'test-key'}):
+            with patch('ai_seo_service._openai_platform_json', side_effect=TimeoutError):
+                packages, provider, fallback_used, warnings = generate_seo_packages(report)
+
+        self.assertEqual(provider, 'openai')
+        self.assertTrue(fallback_used)
+        self.assertIn(
+            'AI platform generation failed for youtubeShorts; completed from visual evidence.',
+            warnings,
+        )
+        forbidden = ['drift', 'дрифт', 'smoke', 'дым', 'phonk', 'race', 'racing', 'гонка']
+        structural_fields = {
+            'platform', 'language', 'userGoal', 'niche', 'resolution', 'aspectRatio',
+            'orientation', 'videoDurationSec', 'score', 'videoAngle', 'generationBasis',
+            'analysisBasis', 'seoCompletionMode',
+        }
+        for platform, package in packages.items():
+            for field in REQUIRED_SEMANTIC_FIELDS[platform]:
+                self.assertTrue(package.get(field), f'{platform}.{field} must be completed')
+            semantic_blob = json.dumps(
+                {key: value for key, value in package.items() if key not in structural_fields},
+                ensure_ascii=False,
+            ).casefold()
+            for term in forbidden:
+                self.assertNotIn(term, semantic_blob, f'{platform} leaked unsupported term {term}')
+            self.assertIn('город', semantic_blob)
+            self.assertIn('дорог', semantic_blob)
+            self.assertIn('закат', semantic_blob)
+            self.assertEqual(package['seoCompletionMode'], 'ai_visual_completion')
+            self.assertIn('visual_ai', package['generationBasis'])
+            self.assertEqual(package['videoAngle'], 'urban_drive_sunset')
+
+    def test_platform_timeout_without_visual_analysis_allows_mock_fallback(self):
+        ai_input = build_ai_input()
+        ai_input.pop('visualAnalysis')
+        ai_input['analysisBasis'] = 'mock_heuristics'
+        ai_input['videoAngle'] = 'auto_drift_phonk'
+        report = {'ai_input': ai_input}
+
+        with patch.dict(os.environ, {'AI_PROVIDER': 'openai', 'OPENAI_API_KEY': 'test-key'}):
+            with patch('ai_seo_service._openai_platform_json', side_effect=TimeoutError):
+                packages, provider, fallback_used, warnings = generate_seo_packages(report)
+
+        self.assertEqual(provider, 'openai')
+        self.assertTrue(fallback_used)
+        self.assertTrue(any('used mock fallback' in warning for warning in warnings))
+        self.assertIn('drift', json.dumps(packages, ensure_ascii=False).casefold())
+
+    def test_global_openai_failure_uses_visual_evidence_for_all_platforms(self):
+        report = {'ai_input': build_ai_input()}
+
+        with patch.dict(os.environ, {'AI_PROVIDER': 'openai', 'OPENAI_API_KEY': 'test-key'}):
+            with patch('ai_seo_service.generate_openai_seo_packages', side_effect=RuntimeError):
+                packages, provider, fallback_used, warnings = generate_seo_packages(report)
+
+        self.assertEqual(provider, 'openai')
+        self.assertTrue(fallback_used)
+        self.assertIn(
+            'AI provider failed globally; completed all platforms from visual evidence.',
+            warnings,
+        )
+        semantic_blob = json.dumps(packages, ensure_ascii=False).casefold()
+        for term in ['drift', 'дрифт', 'smoke', 'дым', 'phonk', 'race', 'racing', 'гонка']:
+            self.assertNotIn(term, semantic_blob)
+        for package in packages.values():
+            self.assertEqual(package['seoCompletionMode'], 'ai_visual_completion')
+            self.assertEqual(package['videoAngle'], 'urban_drive_sunset')
+            self.assertIn('visual_ai', package['generationBasis'])
+
     def test_supported_drift_and_smoke_claims_are_preserved(self):
         visual = {
             **URBAN_SUNSET_VISUAL,

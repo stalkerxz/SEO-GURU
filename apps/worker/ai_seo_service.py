@@ -414,6 +414,11 @@ def _platform_prompt_input(ai_input: Dict[str, Any]) -> Dict[str, Any]:
     return prompt_input
 
 
+def _has_authoritative_visual(ai_input: Dict[str, Any]) -> bool:
+    visual = ai_input.get('visualAnalysis', {}) if isinstance(ai_input, dict) else {}
+    return bool(visual) and safe_confidence((visual or {}).get('confidence')) >= 0.5
+
+
 def _merge_with_mock(platform: str, analysis_report: Dict[str, Any], candidate: Dict[str, Any] | None) -> Dict[str, Any]:
     mock = generate_mock_seo_package(analysis_report, platform)
     if not isinstance(candidate, dict):
@@ -465,10 +470,18 @@ def generate_openai_seo_packages(analysis_report: Dict[str, Any]) -> Tuple[Dict[
                 packages[platform] = _merge_with_mock(platform, analysis_report, candidate)
         except Exception:
             fallback_used = True
-            warning = f'AI response parsing failed for {platform}, used mock fallback.'
+            if _has_authoritative_visual(ai_input):
+                warning = f'AI platform generation failed for {platform}; completed from visual evidence.'
+                package, package_warnings = _complete_visual_ai_package(platform, ai_input, {})
+                packages[platform] = package
+                for package_warning in package_warnings:
+                    if package_warning not in warnings:
+                        warnings.append(package_warning)
+            else:
+                warning = f'AI response parsing failed for {platform}, used mock fallback.'
+                packages[platform] = generate_mock_seo_package(analysis_report, platform)
             print(f'[AI WARNING] {warning}')
             warnings.append(warning)
-            packages[platform] = generate_mock_seo_package(analysis_report, platform)
 
     return packages, warnings, fallback_used
 
@@ -493,6 +506,19 @@ def generate_seo_packages(analysis_report: Dict[str, Any]) -> Tuple[Dict[str, An
         warnings.extend(openai_warnings)
         return seo, 'openai', fallback_used, warnings
     except Exception:
+        ai_input = analysis_report.get('ai_input', {})
+        if _has_authoritative_visual(ai_input):
+            warning = 'AI provider failed globally; completed all platforms from visual evidence.'
+            print(f'[AI WARNING] {warning}')
+            warnings.append(warning)
+            seo = {}
+            for platform in PLATFORMS:
+                package, package_warnings = _complete_visual_ai_package(platform, ai_input, {})
+                seo[platform] = package
+                for package_warning in package_warnings:
+                    if package_warning not in warnings:
+                        warnings.append(package_warning)
+            return seo, 'openai', True, warnings
         warning = 'AI provider failed globally, used mock fallback.'
         print(f'[AI WARNING] {warning}')
         warnings.append(warning)
