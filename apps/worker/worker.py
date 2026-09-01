@@ -10,8 +10,18 @@ import boto3
 import psycopg2
 import redis
 
-from ai_seo_service import analyze_video_frames_with_ai, generate_seo_packages
+from ai_seo_service import (
+    analyze_full_video_intelligence,
+    analyze_opening_frames_with_ai,
+    analyze_video_frames_with_ai,
+    generate_seo_packages,
+    transcribe_audio_with_openai,
+)
+from audio_analysis import analyze_audio_technical, extract_audio_track, no_audio_analysis
 from seo_mock_generator import build_video_angle
+from video_intelligence import build_retention_analysis, safe_confidence
+from video_sampling import build_sampling_plan
+from video_temporal_analysis import build_temporal_analysis, detect_scene_changes
 
 REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379')
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://video:video@localhost:5432/video_seo')
@@ -27,11 +37,23 @@ def ffprobe_json(file_path: str):
     return json.loads(subprocess.check_output(cmd).decode('utf-8'))
 
 
-def extract_frames(file_path: str, out_dir: str, duration: float):
-    fps = '1/5' if duration <= 60 else '1/10' if duration <= 300 else '1/20'
-    pattern = str(Path(out_dir) / 'frame_%04d.jpg')
-    subprocess.check_call(['ffmpeg', '-i', file_path, '-vf', f'fps={fps}', '-q:v', '2', pattern, '-y'])
-    return sorted([Path(out_dir) / f for f in os.listdir(out_dir) if f.endswith('.jpg')])
+def extract_frames_at_timestamps(file_path: str, out_dir: str, timestamps: list[float]):
+    extracted = []
+    warnings = []
+    for index, timestamp in enumerate(timestamps, start=1):
+        output_path = Path(out_dir) / f'frame_{index:04d}.jpg'
+        command = [
+            'ffmpeg', '-hide_banner', '-loglevel', 'error', '-ss', f'{timestamp:.3f}',
+            '-i', file_path, '-frames:v', '1', '-q:v', '2', '-y', str(output_path),
+        ]
+        try:
+            subprocess.check_call(command)
+        except subprocess.CalledProcessError as exc:
+            warnings.append(f'Frame extraction failed at {timestamp:.2f}s: ffmpeg exit {exc.returncode}.')
+            continue
+        if output_path.exists():
+            extracted.append((output_path, timestamp))
+    return extracted, warnings
 
 
 def upload_frame(s3, frame_path: Path, job_id: str, idx: int, approx_time_sec: float):
@@ -409,10 +431,30 @@ def analyze_file(file_path: str, job_id: str, user_context):
     width = vstream.get('width', 0)
     height = vstream.get('height', 0)
 
-    with tempfile.TemporaryDirectory() as d:
-        frame_files = extract_frames(file_path, d, duration)
+    pipeline_warnings = []
+    scene_detection_failed = False
+    try:
+        scene_candidates = detect_scene_changes(file_path)
+    except Exception as exc:
+        scene_candidates = []
+        scene_detection_failed = True
+        pipeline_warnings.append(f'Scene detection failed; using uniform sampling: {exc}')
+
+    temporal_analysis = build_temporal_analysis(duration, scene_candidates)
+    sampling_plan = build_sampling_plan(
+        duration,
+        scene_candidates,
+        scene_detection_failed=scene_detection_failed,
+    )
+
+    with tempfile.TemporaryDirectory() as frame_dir:
+        extracted_frames, extraction_warnings = extract_frames_at_timestamps(
+            file_path,
+            frame_dir,
+            sampling_plan.get('selectedTimestampsSec', []),
+        )
+        pipeline_warnings.extend(extraction_warnings)
         frames = []
-        frame_count = len(frame_files)
         if STORAGE_MODE == 'minio':
             s3 = boto3.client(
                 's3',
@@ -420,13 +462,11 @@ def analyze_file(file_path: str, job_id: str, user_context):
                 aws_access_key_id=os.getenv('MINIO_ACCESS_KEY', 'minio'),
                 aws_secret_access_key=os.getenv('MINIO_SECRET_KEY', 'minio123')
             )
-            for i, f in enumerate(frame_files, start=1):
-                approx_time_sec = round((duration / frame_count) * (i - 1), 2) if frame_count else 0
-                frames.append(upload_frame(s3, f, job_id, i, approx_time_sec))
+            for i, (frame_path, timestamp) in enumerate(extracted_frames, start=1):
+                frames.append(upload_frame(s3, frame_path, job_id, i, round(timestamp, 3)))
         else:
-            for i, f in enumerate(frame_files, start=1):
-                approx_time_sec = round((duration / frame_count) * (i - 1), 2) if frame_count else 0
-                frames.append(persist_local_frame(f, job_id, i, approx_time_sec))
+            for i, (frame_path, timestamp) in enumerate(extracted_frames, start=1):
+                frames.append(persist_local_frame(frame_path, job_id, i, round(timestamp, 3)))
 
     analysis_report = build_analysis_report(
         duration=duration,
@@ -440,6 +480,60 @@ def analyze_file(file_path: str, job_id: str, user_context):
     )
     analysis_report['ai_input']['originalFilename'] = user_context.get('originalFilename', '')
     analysis_report['ai_input']['extractedFilenameHints'] = user_context.get('extractedFilenameHints', {})
+    analysis_report['samplingPlan'] = sampling_plan
+    analysis_report['temporalAnalysis'] = temporal_analysis
+    analysis_report['ai_input']['samplingPlan'] = sampling_plan
+    analysis_report['ai_input']['temporalAnalysis'] = temporal_analysis
+
+    try:
+        audio_analysis = analyze_audio_technical(file_path, astream, duration)
+    except Exception as exc:
+        audio_analysis = no_audio_analysis(duration) if astream is None else {
+            'hasAudio': True,
+            'durationSec': round(duration, 3),
+            'codec': astream.get('codec_name'),
+            'channels': astream.get('channels'),
+            'sampleRate': None,
+            'silenceRatio': None,
+            'approximateLoudness': None,
+            'speechPresent': None,
+            'transcriptionStatus': 'not_attempted',
+        }
+        pipeline_warnings.append(f'Audio technical analysis failed: {exc}')
+
+    transcript = {
+        'status': 'no_audio' if astream is None else 'not_requested',
+        'language': '',
+        'text': '',
+        'segments': [],
+    }
+    transcription_attempted = False
+    if (
+        astream is not None
+        and os.getenv('AI_PROVIDER', 'mock').lower().strip() == 'openai'
+        and os.getenv('OPENAI_API_KEY', '').strip()
+    ):
+        transcription_attempted = True
+        try:
+            with tempfile.TemporaryDirectory() as audio_dir:
+                audio_path = extract_audio_track(file_path, audio_dir)
+                transcript = transcribe_audio_with_openai(
+                    audio_path,
+                    str(user_context.get('language', '') or ''),
+                )
+        except Exception as exc:
+            transcript = {'status': 'failed', 'language': '', 'text': '', 'segments': []}
+            pipeline_warnings.append(f'Audio extraction/transcription failed: {exc}')
+        transcription_warning = transcript.pop('_warning', None)
+        if transcription_warning:
+            pipeline_warnings.append(transcription_warning)
+
+    audio_analysis['speechPresent'] = bool(transcript.get('text')) if transcript.get('status') in {'completed', 'empty'} else audio_analysis.get('speechPresent')
+    audio_analysis['transcriptionStatus'] = transcript.get('status', 'not_requested')
+    analysis_report['audioAnalysis'] = audio_analysis
+    analysis_report['transcript'] = transcript
+    analysis_report['ai_input']['audioAnalysis'] = audio_analysis
+    analysis_report['ai_input']['transcript'] = transcript
     print(
         '[worker][context]',
         json.dumps({
@@ -467,12 +561,14 @@ def analyze_file(file_path: str, job_id: str, user_context):
         }, ensure_ascii=False)
     )
 
-    ai_warnings = []
+    ai_warnings = list(pipeline_warnings)
+    visual_frames_sent = 0
     try:
         visual_analysis = analyze_video_frames_with_ai(
             analysis_report.get('ai_input', {}),
             analysis_report.get('ai_input', {}).get('frameManifest', {}),
         )
+        visual_frames_sent = int(visual_analysis.get('_readableFrames', 0) or 0)
         if visual_analysis.get('_status') == 'skipped_no_readable_frames':
             ai_warnings.append('Visual AI analysis skipped: no readable frames.')
             analysis_report['ai_input']['analysisBasis'] = 'mock_heuristics'
@@ -483,7 +579,10 @@ def analyze_file(file_path: str, job_id: str, user_context):
             visual_analysis.pop('_status', None)
             visual_analysis.pop('_readableFrames', None)
             analysis_report['ai_input']['visualAnalysis'] = visual_analysis
-            analysis_report['ai_input']['analysisBasis'] = 'visual_ai'
+            visual_is_authoritative = safe_confidence(visual_analysis.get('confidence')) >= 0.5
+            analysis_report['ai_input']['analysisBasis'] = (
+                'visual_ai' if visual_is_authoritative else 'visual_ai_low_confidence'
+            )
             meta_for_angle = {
                 'niche': analysis_report['ai_input'].get('niche', 'general_video'),
                 'keywords': analysis_report['ai_input'].get('keywords', []),
@@ -495,16 +594,82 @@ def analyze_file(file_path: str, job_id: str, user_context):
                 'visual_analysis': visual_analysis,
             }
             analysis_report['ai_input']['videoAngle'] = build_video_angle(meta_for_angle)
-            analysis_report['ai_input']['generationBasis'] = [
-                'visual_ai',
-                'technical_fingerprint',
-                'user_context',
-            ]
+            if visual_is_authoritative:
+                analysis_report['ai_input']['generationBasis'] = [
+                    'visual_ai',
+                    'technical_fingerprint',
+                    'user_context',
+                ]
         else:
             analysis_report['ai_input']['analysisBasis'] = 'mock_heuristics'
     except Exception as exc:
         ai_warnings.append(f'Visual AI analysis failed, fallback to mock heuristics: {exc}')
         analysis_report['ai_input']['analysisBasis'] = 'mock_heuristics'
+
+    try:
+        opening_analysis = analyze_opening_frames_with_ai(
+            analysis_report.get('ai_input', {}),
+            analysis_report.get('ai_input', {}).get('frameManifest', {}),
+        )
+        if opening_analysis.get('_status') == 'ok':
+            opening_analysis.pop('_status', None)
+            opening_analysis.pop('_readableFrames', None)
+            analysis_report['openingAnalysis'] = opening_analysis
+            analysis_report['ai_input']['openingAnalysis'] = opening_analysis
+        elif opening_analysis.get('_status') == 'invalid_response':
+            ai_warnings.append('Opening AI analysis skipped: invalid model response.')
+        elif opening_analysis.get('_status') == 'skipped_no_readable_frames':
+            ai_warnings.append('Opening AI analysis skipped: no readable frames.')
+    except Exception as exc:
+        ai_warnings.append(f'Opening AI analysis failed: {exc}')
+
+    try:
+        video_intelligence = analyze_full_video_intelligence(analysis_report.get('ai_input', {}))
+        if video_intelligence.get('_status') == 'ok':
+            video_intelligence.pop('_status', None)
+            analysis_report['videoIntelligence'] = video_intelligence
+            analysis_report['ai_input']['videoIntelligence'] = video_intelligence
+            if safe_confidence(video_intelligence.get('confidence')) >= 0.5:
+                canonical_angle = video_intelligence.get('canonicalVideoAngle')
+                if canonical_angle:
+                    analysis_report['ai_input']['videoAngle'] = canonical_angle
+                elif safe_confidence((analysis_report['ai_input'].get('visualAnalysis') or {}).get('confidence')) < 0.5:
+                    analysis_report['ai_input']['videoAngle'] = 'generic_video'
+                generation_basis = ['video_intelligence']
+                if safe_confidence((analysis_report['ai_input'].get('visualAnalysis') or {}).get('confidence')) >= 0.5:
+                    generation_basis.append('visual_ai')
+                if audio_analysis.get('hasAudio') and (
+                    transcript.get('status') in {'completed', 'empty'}
+                    or audio_analysis.get('approximateLoudness') is not None
+                    or audio_analysis.get('silenceRatio') is not None
+                ):
+                    generation_basis.append('audio_analysis')
+                generation_basis.extend(['technical_fingerprint', 'user_context'])
+                analysis_report['ai_input']['generationBasis'] = generation_basis
+                analysis_report['ai_input']['analysisBasis'] = 'video_intelligence'
+        elif video_intelligence.get('_status') == 'invalid_response':
+            ai_warnings.append('Full video intelligence synthesis skipped: invalid model response.')
+    except Exception as exc:
+        ai_warnings.append(f'Full video intelligence synthesis failed; preserving partial analysis: {exc}')
+
+    retention_analysis = build_retention_analysis(
+        analysis_report.get('videoIntelligence'),
+        analysis_report.get('openingAnalysis'),
+        temporal_analysis,
+    )
+    analysis_report['retentionAnalysis'] = retention_analysis
+    analysis_report['ai_input']['retentionAnalysis'] = retention_analysis
+
+    print(
+        '[worker][video-intelligence]',
+        json.dumps({
+            'job_id': job_id,
+            'visualFramesSentToAI': visual_frames_sent,
+            'transcriptionAttempted': transcription_attempted,
+            'sceneCandidateCount': len(scene_candidates),
+            'samplingStrategy': sampling_plan.get('strategy'),
+        }, ensure_ascii=False),
+    )
 
     seo_draft, ai_provider_used, ai_fallback_used, seo_warnings = generate_seo_packages(analysis_report)
     ai_warnings.extend(seo_warnings)

@@ -13,7 +13,7 @@ Monorepo MVP для анализа видео (SEO-ready metadata) с веб-и�
 1. Пользователь загружает видео на frontend.
 2. Frontend отправляет файл на API (`/api/videos/upload`).
 3. API сохраняет видео в MinIO (или локально в dev), создает задачу и кладет в Redis queue.
-4. Worker забирает задачу, анализирует через `ffprobe`, извлекает ключевые кадры.
+4. Worker забирает задачу, строит adaptive sampling plan, анализирует кадры, монтаж, opening, аудио и речь, затем формирует unified Video Intelligence Report и SEO.
 5. Worker обновляет задачу в PostgreSQL.
 6. Frontend опрашивает API и отображает статус + результат.
 
@@ -35,6 +35,7 @@ docker compose up --build
 4. Дождитесь завершения анализа и проверьте:
    - технические параметры;
    - превью кадров;
+   - полный анализ видео, сюжета, монтажа, аудио и удержания;
    - SEO-пакеты по платформам;
    - копирование SEO-пакета по кнопке.
 
@@ -103,12 +104,17 @@ python apps/worker/worker.py  # background consumer
 
 ## AI режимы (mock/openai)
 - `AI_PROVIDER=mock`: работает без ключа OpenAI, SEO строится на техническом анализе, контексте и эвристиках fallback.
-- `AI_PROVIDER=openai` + `OPENAI_API_KEY`: включается AI-анализ выбранных кадров (`frameManifest`) и генерация SEO с приоритетом визуальных сигналов.
-- Кадры анализируются выборочно (не всё видео целиком), чтобы снизить стоимость и ускорить обработку.
+- `AI_PROVIDER=openai` + `OPENAI_API_KEY`: включается полный Video Intelligence pipeline и генерация SEO с приоритетом доказательств из видео.
+- Worker строит adaptive scene-aware sampling plan (6–24 кадров), отдельно оценивает первые 3 секунды, монтаж, аудио и речь, затем синтезирует единый `videoIntelligence` report.
+- `OPENAI_TRANSCRIBE_MODEL` позволяет заменить модель транскрипции; по умолчанию используется совместимый с текущим SDK `whisper-1`.
+- `VIDEO_SCENE_THRESHOLD` управляет чувствительностью FFmpeg scene detection, `VIDEO_AI_MAX_FRAMES` задаёт hard limit отправляемых кадров (не более 24).
+- Временные кадры и аудиофайлы удаляются после обработки; API key не выводится в логах.
 - `filename` используется только как weak hint, а не как основной источник смысла.
 - Проверка mock mode: `visualAnalysis` отсутствует, `analysisBasis=mock_heuristics`.
-- Проверка openai+MinIO mode: при читаемых кадрах появляется `visualAnalysis`.
+- Проверка openai+MinIO mode: при читаемых кадрах появляется `visualAnalysis`, а при успешном synthesis — `videoIntelligence` и `analysisBasis=video_intelligence`.
 - Если кадры недоступны для чтения: job завершается со статусом `done`, а в `aiWarnings` появляется `Visual AI analysis skipped: no readable frames.`
+- Scene detection, audio extraction, transcription, opening analysis и full synthesis являются graceful stages: сбой сохраняется в `aiWarnings`, а job продолжает доступный visual/technical fallback.
+- Retention-блок — экспертная оценка структуры ролика, а не фактическая аналитика удержания и не обещание просмотров.
 
 ## PR8 / UI refresh
 - Полностью обновлён интерфейс `apps/web` в стиле минималистичного SaaS dashboard (mobile-first, карточная структура, улучшенная визуальная иерархия).
@@ -120,7 +126,7 @@ python apps/worker/worker.py  # background consumer
 - В `ai_input` добавлены `frameManifest`, `videoFingerprint`, `contentHints`, чтобы prompt-builder и mock SEO учитывали конкретный ролик, а не только user context.
 - Mock SEO теперь строится от `videoAngle` (auto/event/horizontal/square/vertical/generic), чтобы разные видео с одинаковым user context получали разные SEO-пакеты.
 - Frontend показывает `videoAngle` и `generationBasis` в блоке «Видео-подсказки», чтобы было видно источники различий (technical fingerprint, filename hints, user keywords, mixed context).
-- Ограничение текущей версии: computer vision/распознавания объектов пока нет, поэтому выводы строятся только по technical fingerprint, filename hints, user keywords и platform score.
+- Исторический PR10 mock-path сохранён для `AI_PROVIDER=mock`; в OpenAI-режиме его semantic-эвристики не переопределяют authoritative visual/video intelligence.
 
 ## PR11 / Readable mock SEO copy
 - Mock SEO-тексты очищены от внутренних technical values: служебные ключи больше не попадают в заголовки, описания, комментарии и хештеги.
