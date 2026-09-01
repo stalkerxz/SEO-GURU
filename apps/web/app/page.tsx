@@ -57,6 +57,18 @@ const contextLabels: Record<string, string> = {
   urban_drive: 'Городская поездка',
   urban_drive_sunset: 'Городская поездка на закате',
   urban_drive_cinematic: 'Атмосферная городская поездка',
+  auto_cinematic: 'Автомобильный синематик',
+  auto_detail_showcase: 'Детальный показ автомобиля',
+  auto_review: 'Автомобильный обзор',
+  auto_sale: 'Автомобиль для продажи',
+  event_people_scene: 'Событие с людьми',
+  event_scene: 'Событие',
+  talking_head: 'Разговорное видео',
+  product_showcase: 'Демонстрация продукта',
+  tutorial: 'Обучающее видео',
+  story_reveal: 'История с раскрытием',
+  ambient_scene: 'Атмосферная сцена',
+  generic_video: 'Общее видео',
   ru: 'Русский',
   en: 'Английский'
 };
@@ -221,6 +233,152 @@ function MetricCard({ label, value }: { label: string; value: string }) {
       <p className="text-xs text-slate-500">{label}</p>
       <p className="mt-1 text-sm font-semibold text-slate-900">{value || '—'}</p>
     </div>
+  );
+}
+
+const formatSeconds = (value: any) => {
+  if (value == null || value === '') return '—';
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? `${numeric.toFixed(numeric < 10 ? 1 : 0)} сек` : '—';
+};
+
+const confidenceLabel = (value: any) => {
+  if (value == null || value === '') return '—';
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? `${Math.round(numeric * 100)}%` : '—';
+};
+
+function InsightList({ items, empty = 'Нет данных' }: { items?: any[]; empty?: string }) {
+  const values = Array.isArray(items) ? items.filter(Boolean).map(String) : [];
+  if (values.length === 0) return <p className="text-sm text-slate-500">{empty}</p>;
+  return (
+    <ul className="list-disc space-y-1 pl-5 text-sm text-slate-700">
+      {values.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}
+    </ul>
+  );
+}
+
+function FullVideoIntelligenceCard({
+  intelligence,
+  opening,
+  temporal,
+  audio,
+  transcript,
+  retention
+}: {
+  intelligence: any;
+  opening: any;
+  temporal: any;
+  audio: any;
+  transcript: any;
+  retention: any;
+}) {
+  const openingHook = intelligence?.openingHook || opening || {};
+  const editing = intelligence?.editing || temporal || {};
+  const audioSummary = intelligence?.audio || {};
+  const hasAudio = audio?.hasAudio ?? audioSummary?.hasAudio;
+  const hasSpeech = audioSummary?.speechPresent ?? audio?.speechPresent;
+  const story = intelligence?.story || {};
+  const retentionSummary = retention || intelligence?.retention || {};
+  const hasPipelineData = Boolean(intelligence || opening || temporal || audio || transcript);
+
+  if (!hasPipelineData) return null;
+
+  return (
+    <article className={cardClass}>
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Video Intelligence</p>
+        <h2 className="mt-1 text-xl font-semibold">Полный анализ видео</h2>
+      </div>
+
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        <section className="rounded-xl border border-slate-200 p-4">
+          <h3 className="font-semibold">Обзор</h3>
+          <div className="mt-3 space-y-2 text-sm text-slate-700">
+            <p>{intelligence?.summary || 'Единый AI-обзор недоступен; показаны доступные этапы анализа.'}</p>
+            <p><span className="font-medium">Формат:</span> {intelligence?.contentType || '—'}</p>
+            <p><span className="font-medium">Основная тема:</span> {intelligence?.primarySubject || '—'}</p>
+            <p><span className="font-medium">Уверенность:</span> {confidenceLabel(intelligence?.confidence)}</p>
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 p-4">
+          <h3 className="font-semibold">Первые 3 секунды</h3>
+          <div className="mt-3 space-y-2 text-sm text-slate-700">
+            <p>{openingHook?.summary || openingHook?.visualSummary || '—'}</p>
+            <p><span className="font-medium">Тип hook:</span> {openingHook?.type || openingHook?.hookType || '—'}</p>
+            <p><span className="font-medium">Сила:</span> {confidenceLabel(openingHook?.strength ?? openingHook?.hookStrength)}</p>
+            <p><span className="font-medium">Риск удержания:</span> {openingHook?.retentionRisk || '—'}</p>
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 p-4">
+          <h3 className="font-semibold">Монтаж</h3>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <MetricCard label="Сцен" value={String(editing?.estimatedSceneCount ?? '—')} />
+            <MetricCard label="Темп" value={String(editing?.pacing || '—')} />
+            <MetricCard label="Смен в минуту" value={String(editing?.cutsPerMinute ?? '—')} />
+            <MetricCard label="Средняя сцена" value={formatSeconds(editing?.averageShotDurationSec)} />
+          </div>
+          {(editing?.strengths?.length > 0 || editing?.weaknesses?.length > 0) && (
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div><p className="mb-1 text-xs font-semibold text-slate-500">Сильные стороны</p><InsightList items={editing.strengths} /></div>
+              <div><p className="mb-1 text-xs font-semibold text-slate-500">Что мешает</p><InsightList items={editing.weaknesses} /></div>
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-xl border border-slate-200 p-4">
+          <h3 className="font-semibold">Аудио и речь</h3>
+          <div className="mt-3 space-y-2 text-sm text-slate-700">
+            <p><span className="font-medium">Аудио:</span> {hasAudio == null ? '—' : hasAudio ? 'есть' : 'не обнаружено'}</p>
+            <p><span className="font-medium">Речь:</span> {hasSpeech == null ? '—' : hasSpeech ? 'обнаружена' : 'не подтверждена'}</p>
+            <p>{audioSummary?.speechSummary || 'Краткое содержание речи недоступно.'}</p>
+            <p className="text-xs text-slate-500">Статус транскрипции: {transcript?.status || audio?.transcriptionStatus || '—'}</p>
+            {transcript?.text && (
+              <details className="rounded-lg bg-slate-50 p-3">
+                <summary className="cursor-pointer font-medium">Показать транскрипт</summary>
+                <p className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap leading-relaxed">{transcript.text}</p>
+              </details>
+            )}
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 p-4">
+          <h3 className="font-semibold">Сюжет</h3>
+          <div className="mt-3 space-y-2 text-sm text-slate-700">
+            <p><span className="font-medium">Структура:</span> {story?.structure || '—'}</p>
+            <p><span className="font-medium">Начало:</span> {story?.beginning || '—'}</p>
+            <p><span className="font-medium">Развитие:</span> {story?.development || '—'}</p>
+            <p><span className="font-medium">Payoff / финал:</span> {story?.payoff || story?.ending || '—'}</p>
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 p-4">
+          <h3 className="font-semibold">Удержание</h3>
+          <p className="mt-1 text-xs text-slate-500">{retentionSummary?.disclaimer || 'Экспертная оценка, не фактическая аналитика удержания.'}</p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div><p className="mb-1 text-xs font-semibold text-slate-500">Сильные стороны</p><InsightList items={retentionSummary?.strengths} /></div>
+            <div><p className="mb-1 text-xs font-semibold text-slate-500">Риски</p><InsightList items={retentionSummary?.risks} /></div>
+          </div>
+          <div className="mt-3"><p className="mb-1 text-xs font-semibold text-slate-500">Что улучшить</p><InsightList items={retentionSummary?.recommendedEdits || retentionSummary?.improvements} /></div>
+        </section>
+      </div>
+
+      <section className="mt-4 rounded-xl border border-slate-200 p-4">
+        <h3 className="font-semibold">Лучшие моменты</h3>
+        {intelligence?.strongestMoments?.length > 0 ? (
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {intelligence.strongestMoments.map((moment: any, index: number) => (
+              <div key={`${moment.timestampSec}-${index}`} className="rounded-lg bg-slate-50 px-3 py-2 text-sm">
+                <span className="font-semibold text-blue-700">{formatSeconds(moment.timestampSec)}</span>
+                <span className="ml-2 text-slate-700">{moment.reason || 'Сильный момент ролика'}</span>
+              </div>
+            ))}
+          </div>
+        ) : <p className="mt-2 text-sm text-slate-500">Не определены.</p>}
+      </section>
+    </article>
   );
 }
 
@@ -395,6 +553,12 @@ export default function Home() {
   const platformFit = report?.platformFit || {};
   const aiInput = report?.ai_input || {};
   const visualAnalysis = aiInput?.visualAnalysis || null;
+  const videoIntelligence = report?.videoIntelligence || aiInput?.videoIntelligence || null;
+  const openingAnalysis = report?.openingAnalysis || aiInput?.openingAnalysis || null;
+  const temporalAnalysis = report?.temporalAnalysis || aiInput?.temporalAnalysis || null;
+  const audioAnalysis = report?.audioAnalysis || aiInput?.audioAnalysis || null;
+  const transcript = report?.transcript || aiInput?.transcript || null;
+  const retentionAnalysis = report?.retentionAnalysis || aiInput?.retentionAnalysis || null;
   const videoFingerprint = aiInput?.videoFingerprint || {};
   const statusText = useMemo(
     () => (job?.status ? statusLabels[job.status] || job.status : null),
@@ -474,6 +638,15 @@ export default function Home() {
               </div>
             </article>
 
+            <FullVideoIntelligenceCard
+              intelligence={videoIntelligence}
+              opening={openingAnalysis}
+              temporal={temporalAnalysis}
+              audio={audioAnalysis}
+              transcript={transcript}
+              retention={retentionAnalysis}
+            />
+
             <article className={cardClass}>
               <h2 className="text-lg font-semibold">Видео-подсказки</h2>
               <div className="mt-3 space-y-2">
@@ -509,7 +682,7 @@ export default function Home() {
                   </div>
                   <p className="text-xs font-semibold text-slate-600">Лучшие кадры</p>
                   <ul className="list-disc pl-5">
-                    {(visualAnalysis.bestFrames || []).map((f: any, i: number) => <li key={`best-${i}`}>Frame {f.frameIndex}: {f.reason}</li>)}
+                    {(visualAnalysis.bestFrames || []).map((f: any, i: number) => <li key={`best-${i}`}>Frame {f.frameIndex} · {formatSeconds(f.timestampSec)}: {f.reason}</li>)}
                   </ul>
                 </div>
               )}
